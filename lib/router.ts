@@ -164,6 +164,14 @@ export async function execute(vault: Vault, requested: string, path: string, bod
     let selected: Credential | undefined;
     try {
       selected = await credential(provider, vault, secret);
+      console.log("=== DEBUG ===");
+      console.log("Provider:", provider.name);
+      console.log("Base URL:", provider.baseUrl);
+      console.log("Model:", target.model);
+      console.log("Token prefix:", selected.token.slice(0, 12));
+      console.log("Token length:", selected.token.length);
+      console.log("Headers:", openAIHeaders(provider, selected.token));
+      console.log("=============");
       let response: Response;
       if (provider.format === "anthropic" && path === "/chat/completions") {
         response = await fetchVia(provider, `${base(provider.baseUrl)}/messages`, { method: "POST", headers: { "content-type": "application/json", "x-api-key": selected.token, "anthropic-version": "2023-06-01", ...provider.headers }, body: JSON.stringify(anthropicBody(body, target.model)), signal });
