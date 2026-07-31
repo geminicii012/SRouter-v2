@@ -186,7 +186,8 @@ export async function execute(vault: Vault, requested: string, path: string, bod
           return response;
         }
       }
-      last = `${provider.name}: HTTP ${response.status}`;
+      const errorText = await response.text();
+      last = ${provider.name}: HTTP ${response.status} - ${errorText}`;
       if (response.status === 429 && selected.keyId) await setCooldown(selected.keyId, Number(response.headers.get("retry-after")) || 60);
       if (vault.logging) await addLog({ at: new Date().toISOString(), provider: provider.name, model: target.model, status: response.status, error: last, latency: Date.now() - started }, vault.logLimit);
     } catch (error) {
