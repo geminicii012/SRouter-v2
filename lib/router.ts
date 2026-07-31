@@ -50,7 +50,16 @@ async function credential(provider: Provider, vault?: Vault, secret?: string): P
 }
 
 function openAIHeaders(provider: Provider, token: string) {
-  return { "content-type": "application/json", authorization: `Bearer ${token}`, ...provider.headers };
+ const headers = new Headers({
+  "Content-Type": "application/json",
+  "Authorization": `Bearer ${token}`,
+});
+
+for (const [k, v] of Object.entries(provider.headers ?? {})) {
+  headers.set(k, v);
+}
+
+return headers;
 }
 
 function relayOrder(provider: Provider, upstream: string) {
