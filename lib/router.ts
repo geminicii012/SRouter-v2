@@ -72,9 +72,9 @@ async function fetchVia(provider: Provider, upstream: string, init: RequestInit)
     try {
       await assertSafeRemoteUrl(destination.url);
       const headers = new Headers(init.headers);
-      if (destination.target) {
-        headers.set("x-srouter-target", destination.target);
-        headers.set("x-srouter-relay-secret", destination.secret || "");
+      if ("target" in destination && destination.target) {
+      headers.set("x-srouter-target", destination.target);
+      headers.set("x-srouter-relay-secret", destination.secret || "");
       }
       const response = await fetch(destination.url, {
         ...init,
