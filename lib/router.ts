@@ -95,7 +95,15 @@ async function fetchVia(provider: Provider, upstream: string, init: RequestInit)
       });
 
       console.log("AFTER FETCH", response.status);
-      if (response.ok || !retryable.has(response.status)) return response;
+    if (!response.ok) {
+    console.log("STATUS:", response.status);
+    console.log("RESP HEADERS:", Object.fromEntries(response.headers.entries()));
+    console.log("RESP BODY:", await response.clone().text());
+    }
+
+    if (response.ok || !retryable.has(response.status)) {
+    return response;
+    }
       last = `${destination.label}: HTTP ${response.status}`;
     } catch (error) {
       last = error instanceof Error ? error.message : "Network error";
