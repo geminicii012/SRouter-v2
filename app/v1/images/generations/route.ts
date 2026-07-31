@@ -1,0 +1,1 @@
+import type {NextRequest} from "next/server";import{handleJsonEndpoint}from"@/lib/handlers";export const maxDuration=300;export async function POST(request:NextRequest){return handleJsonEndpoint(request,"/images/generations")}

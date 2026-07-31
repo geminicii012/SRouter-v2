@@ -1,0 +1,5 @@
+name = "srouter-relay"
+main = "src/index.ts"
+compatibility_date = "2026-07-01"
+[vars]
+ALLOWED_HOSTS = "api.openai.com,api.anthropic.com,generativelanguage.googleapis.com,integrate.api.nvidia.com,openrouter.ai"

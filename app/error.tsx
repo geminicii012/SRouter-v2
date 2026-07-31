@@ -1,0 +1,2 @@
+"use client";
+export default function ErrorPage({reset}:{error:Error&{digest?:string};reset:()=>void}){return <main className="setup"><section className="setup-card"><div className="logo">S</div><h1>SRouter mengalami masalah</h1><p className="muted">Muat ulang halaman. Konfigurasi terenkripsi tetap tersimpan di Upstash.</p><button className="btn primary" onClick={reset}>Coba lagi</button></section></main>}

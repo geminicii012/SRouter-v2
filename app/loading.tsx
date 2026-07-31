@@ -1,0 +1,1 @@
+export default function Loading(){return <main className="setup"><section className="setup-card"><div className="logo">S</div><h1>Memuat SRouter</h1><p className="muted">Membuka control plane terenkripsi…</p></section></main>}
