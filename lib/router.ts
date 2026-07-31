@@ -188,12 +188,33 @@ export async function execute(vault: Vault, requested: string, path: string, bod
           return body.stream ? syntheticSSE(result) : jsonResponse(result);
         }
       } else {
-        response = await fetchVia(provider, `${base(provider.baseUrl)}${path}`, { method: "POST", headers: openAIHeaders(provider, selected.token), body: JSON.stringify({ ...body, model: target.model }), signal });
-        if (response.ok) {
-          if (vault.logging) await addLog({ at: new Date().toISOString(), provider: provider.name, model: target.model, status: response.status, latency: Date.now() - started }, vault.logLimit);
-          return response;
-        }
-      }
+  const requestBody = { ...body, model: target.model };
+  console.log("REQUEST BODY:", JSON.stringify(requestBody));
+
+  response = await fetchVia(
+    provider,
+    `${base(provider.baseUrl)}${path}`,
+    {
+      method: "POST",
+      headers: openAIHeaders(provider, selected.token),
+      body: JSON.stringify(requestBody),
+      signal,
+    }
+  );
+
+  if (response.ok) {
+    if (vault.logging) {
+      await addLog({
+        at: new Date().toISOString(),
+        provider: provider.name,
+        model: target.model,
+        status: response.status,
+        latency: Date.now() - started
+      }, vault.logLimit);
+    }
+    return response;
+  }
+}
       const errorText = await response.text();
       last = `${provider.name}: HTTP ${response.status} - ${errorText}`;
       if (response.status === 429 && selected.keyId) await setCooldown(selected.keyId, Number(response.headers.get("retry-after")) || 60);
