@@ -85,12 +85,16 @@ async function fetchVia(provider: Provider, upstream: string, init: RequestInit)
       headers.set("x-srouter-target", destination.target);
       headers.set("x-srouter-relay-secret", destination.secret || "");
       }
+      console.log("BEFORE FETCH", destination.url);
+
       const response = await fetch(destination.url, {
-        ...init,
-        headers,
-        redirect: "error",
-        signal: requestSignal(init.signal || undefined, provider.timeoutMs || 120_000),
+      ...init,
+      headers,
+      redirect: "error",
+      signal: requestSignal(init.signal || undefined, provider.timeoutMs || 120_000),
       });
+
+      console.log("AFTER FETCH", response.status);
       if (response.ok || !retryable.has(response.status)) return response;
       last = `${destination.label}: HTTP ${response.status}`;
     } catch (error) {
