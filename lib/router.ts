@@ -1,3 +1,4 @@
+import OpenAI from "openai";
 import type { Provider, ProviderKey, RouteTarget, Vault } from "./types";
 import { addLog, isCooling, nextCounter, saveVault, setCooldown } from "./vault";
 import { assertSafeRemoteUrl, requestSignal } from "./security";
@@ -5,6 +6,11 @@ import { assertSafeRemoteUrl, requestSignal } from "./security";
 const retryable = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
 const base = (value: string) => value.replace(/\/$/, "");
 type Credential = { token: string; keyId?: string };
+type RawOpenAIClient = OpenAI & {
+  post(path: string, options: { body: any; signal?: AbortSignal }): {
+    asResponse(): Promise<Response>;
+  };
+};
 
 async function credential(provider: Provider, vault?: Vault, secret?: string): Promise<Credential> {
   if (provider.oauth?.accessToken && (!provider.oauth.expiresAt || provider.oauth.expiresAt > Date.now() + 30_000)) {
@@ -49,19 +55,6 @@ async function credential(provider: Provider, vault?: Vault, secret?: string): P
   return { token: chosen.value, keyId: chosen.id };
 }
 
-function openAIHeaders(provider: Provider, token: string) {
- const headers = new Headers({
-  "Content-Type": "application/json",
-  "Authorization": `Bearer ${token}`,
-});
-
-for (const [k, v] of Object.entries(provider.headers ?? {})) {
-  headers.set(k, v);
-}
-
-return headers;
-}
-
 function relayOrder(provider: Provider, upstream: string) {
   const relays = (provider.relays || [])
     .filter((relay) => relay.enabled)
@@ -82,34 +75,86 @@ async function fetchVia(provider: Provider, upstream: string, init: RequestInit)
       await assertSafeRemoteUrl(destination.url);
       const headers = new Headers(init.headers);
       if ("target" in destination && destination.target) {
-      headers.set("x-srouter-target", destination.target);
-      headers.set("x-srouter-relay-secret", destination.secret || "");
+        headers.set("x-srouter-target", destination.target);
+        headers.set("x-srouter-relay-secret", destination.secret || "");
       }
-      console.log("BEFORE FETCH", destination.url);
 
       const response = await fetch(destination.url, {
-      ...init,
-      headers,
-      redirect: "error",
-      signal: requestSignal(init.signal || undefined, provider.timeoutMs || 120_000),
+        ...init,
+        headers,
+        redirect: "error",
+        signal: requestSignal(init.signal || undefined, provider.timeoutMs || 120_000),
       });
 
-      console.log("AFTER FETCH", response.status);
-    if (!response.ok) {
-    console.log("STATUS:", response.status);
-    console.log("RESP HEADERS:", Object.fromEntries(response.headers.entries()));
-    console.log("RESP BODY:", await response.clone().text());
-    }
-
-    if (response.ok || !retryable.has(response.status)) {
-    return response;
-    }
+      if (response.ok || !retryable.has(response.status)) {
+        return response;
+      }
       last = `${destination.label}: HTTP ${response.status}`;
     } catch (error) {
       last = error instanceof Error ? error.message : "Network error";
     }
   }
   throw new Error(last);
+}
+
+type FetchInput = Parameters<typeof fetch>[0];
+type FetchInit = Parameters<typeof fetch>[1];
+
+function fetchUrl(input: FetchInput) {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.toString();
+  return input.url;
+}
+
+function fetchInit(input: FetchInput, init: FetchInit): RequestInit {
+  if (typeof input === "string" || input instanceof URL) return init || {};
+  return { method: input.method, headers: input.headers, body: input.body, ...init };
+}
+
+function openAIFetch(provider: Provider): typeof fetch {
+  return ((input: FetchInput, init?: FetchInit) => {
+    return fetchVia(provider, fetchUrl(input), fetchInit(input, init));
+  }) as typeof fetch;
+}
+
+function headersFromError(headers: unknown) {
+  const result = new Headers();
+  if (headers instanceof Headers) {
+    headers.forEach((value, key) => result.set(key, value));
+  } else if (headers && typeof headers === "object") {
+    for (const [key, value] of Object.entries(headers)) {
+      if (typeof value === "string") result.set(key, value);
+    }
+  }
+  if (!result.has("content-type")) result.set("content-type", "application/json");
+  return result;
+}
+
+function responseFromOpenAIError(error: unknown) {
+  const candidate = error as { status?: unknown; headers?: unknown; error?: unknown; message?: string };
+  if (typeof candidate.status !== "number") return undefined;
+  const payload = candidate.error ?? { message: candidate.message || "Upstream error" };
+  const body = typeof payload === "string" ? payload : JSON.stringify({ error: payload });
+  return new Response(body, { status: candidate.status, headers: headersFromError(candidate.headers) });
+}
+
+async function openAIResponse(provider: Provider, token: string, path: string, body: any, model: string, signal?: AbortSignal) {
+  const client = new OpenAI({
+    apiKey: token,
+    baseURL: base(provider.baseUrl),
+    defaultHeaders: provider.headers,
+    fetch: openAIFetch(provider),
+    maxRetries: 0,
+    timeout: provider.timeoutMs || 120_000,
+  }) as RawOpenAIClient;
+
+  try {
+    return await client.post(path, { body: { ...body, model }, signal }).asResponse();
+  } catch (error) {
+    const response = responseFromOpenAIError(error);
+    if (response) return response;
+    throw error;
+  }
 }
 
 export function anthropicBody(body: any, model: string) {
@@ -185,14 +230,6 @@ export async function execute(vault: Vault, requested: string, path: string, bod
     let selected: Credential | undefined;
     try {
       selected = await credential(provider, vault, secret);
-      console.log("=== DEBUG ===");
-      console.log("Provider:", provider.name);
-      console.log("Base URL:", provider.baseUrl);
-      console.log("Model:", target.model);
-      console.log("Token prefix:", selected.token.slice(0, 12));
-      console.log("Token length:", selected.token.length);
-      console.log("Headers:", openAIHeaders(provider, selected.token));
-      console.log("=============");
       let response: Response;
       if (provider.format === "anthropic" && path === "/chat/completions") {
         response = await fetchVia(provider, `${base(provider.baseUrl)}/messages`, { method: "POST", headers: { "content-type": "application/json", "x-api-key": selected.token, "anthropic-version": "2023-06-01", ...provider.headers }, body: JSON.stringify(anthropicBody(body, target.model)), signal });
@@ -208,34 +245,23 @@ export async function execute(vault: Vault, requested: string, path: string, bod
           if (vault.logging) await addLog({ at: new Date().toISOString(), provider: provider.name, model: target.model, status: 200, latency: Date.now() - started }, vault.logLimit);
           return body.stream ? syntheticSSE(result) : jsonResponse(result);
         }
+      } else if (provider.format === "openai") {
+        response = await openAIResponse(provider, selected.token, path, body, target.model, signal);
+        if (response.ok) {
+          if (vault.logging) {
+            await addLog({
+              at: new Date().toISOString(),
+              provider: provider.name,
+              model: target.model,
+              status: response.status,
+              latency: Date.now() - started,
+            }, vault.logLimit);
+          }
+          return response;
+        }
       } else {
-  const requestBody = { ...body, model: target.model };
-  console.log("REQUEST BODY:", JSON.stringify(requestBody));
-
-  response = await fetchVia(
-    provider,
-    `${base(provider.baseUrl)}${path}`,
-    {
-      method: "POST",
-      headers: openAIHeaders(provider, selected.token),
-      body: JSON.stringify(requestBody),
-      signal,
-    }
-  );
-
-  if (response.ok) {
-    if (vault.logging) {
-      await addLog({
-        at: new Date().toISOString(),
-        provider: provider.name,
-        model: target.model,
-        status: response.status,
-        latency: Date.now() - started
-      }, vault.logLimit);
-    }
-    return response;
-  }
-}
+        throw new Error(`Format ${provider.format} tidak mendukung ${path}`);
+      }
       const errorText = await response.text();
       last = `${provider.name}: HTTP ${response.status} - ${errorText}`;
       if (response.status === 429 && selected.keyId) await setCooldown(selected.keyId, Number(response.headers.get("retry-after")) || 60);
