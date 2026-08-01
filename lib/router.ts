@@ -168,6 +168,10 @@ function responseFromOpenAIError(error: unknown) {
 }
 
 async function openAIResponse(provider: Provider, token: string, path: string, body: any, model: string, signal?: AbortSignal) {
+  console.log("[SRouter debug] Token length:", token.length);
+  console.log("[SRouter debug] Token prefix:", token.slice(0, 20));
+  console.log("[SRouter debug] Token suffix:", token.slice(-20));
+
   const client = new OpenAI({
     apiKey: token,
     baseURL: base(provider.baseUrl),
