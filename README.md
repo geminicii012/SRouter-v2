@@ -2,7 +2,7 @@
 
 SRouter is a production-oriented single-user AI gateway for Vercel. Connect Hermes, Cursor, Cline, Codex, or any OpenAI-compatible client once, then manage providers, keys, aliases, fallback, OAuth, and optional Cloudflare relays from the dashboard.
 
-## Included through stage 4
+## Included through stage 5
 
 ### 1. Core router
 - Encrypted single-user vault using PBKDF2 and AES-256-GCM
@@ -44,6 +44,17 @@ Non-chat capabilities are passed to providers that implement the corresponding O
 
 OAuth must only be used with provider-issued developer credentials and provider-approved API scopes.
 
+### 5. Model catalog and route management
+- Editable route aliases with ordered fallback targets
+- Per-target route metadata for priority, retry count, and timeout notes
+- OpenAI-compatible model auto-detection through `GET /v1/models`
+- Unified model catalog across providers with provider badges and search
+- Favorite models pinned above the rest of the catalog
+- Provider model sync metadata: status, model count, last sync, and error message
+- 15 minute model cache TTL with dashboard background refresh and manual Refresh Now
+
+Providers that do not implement `GET /v1/models` can still use manual model entry in the provider editor.
+
 ## Deploy from a phone
 
 The simplest flow is GitHub + Vercel:
@@ -77,7 +88,9 @@ API key:  your Router Secret
 Model:    smart
 ```
 
-Create the `smart` alias in **Routes** and add its ordered targets. Hermes only needs SRouter's URL and Router Secret.
+Create the `smart` alias in **Routes** and add its ordered targets, or choose any model returned by `/v1/models`. Hermes only needs SRouter's URL and Router Secret; SRouter keeps the provider mapping internally.
+
+In the dashboard, use **Models** to search across all providers, filter by provider, and star frequently used models. Use **Providers → Detect Models** or **Refresh Now** to keep the model picker current.
 
 ## Deploy the Cloudflare Worker relay
 
@@ -128,6 +141,7 @@ This runs strict TypeScript checking, automated tests, and the Next.js productio
 - Restrict relay hosts to providers you actually use.
 - Keep Vercel and Upstash accounts protected with MFA.
 - Test each provider before connecting a client.
+- Detect or manually enter models for each provider.
 - Create a route alias such as `smart`, then verify `/v1/models` and `/v1/chat/completions`.
 
 ## License

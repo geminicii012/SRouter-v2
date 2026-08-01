@@ -64,24 +64,6 @@ function relayOrder(provider: Provider, upstream: string) {
   return [{ url: upstream, label: "direct" }, ...relays];
 }
 
-function debugHeaders(headers: Headers) {
-  const entries = [...headers.entries()].map(([key, value]) => [
-    key,
-    key.toLowerCase() === "authorization" ? `${value.slice(0, 10)}...` : value,
-  ]);
-  return Object.fromEntries(entries);
-}
-
-function debugJsonBody(headers: Headers, body: BodyInit | null | undefined) {
-  if (!headers.get("content-type")?.toLowerCase().includes("application/json")) return undefined;
-  if (typeof body !== "string") return undefined;
-  try {
-    return JSON.parse(body);
-  } catch {
-    return body;
-  }
-}
-
 async function fetchVia(provider: Provider, upstream: string, init: RequestInit) {
   await assertSafeRemoteUrl(upstream);
   let last = "Upstream gagal";
@@ -97,23 +79,12 @@ async function fetchVia(provider: Provider, upstream: string, init: RequestInit)
         headers.set("x-srouter-relay-secret", destination.secret || "");
       }
 
-      console.log("[SRouter debug] final url", destination.url);
-      console.log("[SRouter debug] method", init.method || "GET");
-      console.log("[SRouter debug] request headers", debugHeaders(headers));
-      const requestJsonBody = debugJsonBody(headers, init.body);
-      if (requestJsonBody !== undefined) console.log("[SRouter debug] request json body", requestJsonBody);
-
       const response = await fetch(destination.url, {
         ...init,
         headers,
         redirect: "error",
         signal: requestSignal(init.signal || undefined, provider.timeoutMs || 120_000),
       });
-
-      console.log("[SRouter debug] response status", response.status);
-      console.log("[SRouter debug] response headers", Object.fromEntries(response.headers.entries()));
-      const responseBody = await response.clone().text();
-      if (responseBody) console.log("[SRouter debug] response body", responseBody);
 
       if (response.ok || !retryable.has(response.status)) {
         return response;
@@ -168,10 +139,6 @@ function responseFromOpenAIError(error: unknown) {
 }
 
 async function openAIResponse(provider: Provider, token: string, path: string, body: any, model: string, signal?: AbortSignal) {
-  console.log("[SRouter debug] Token length:", token.length);
-  console.log("[SRouter debug] Token prefix:", token.slice(0, 20));
-  console.log("[SRouter debug] Token suffix:", token.slice(-20));
-
   const client = new OpenAI({
     apiKey: token,
     baseURL: base(provider.baseUrl),
