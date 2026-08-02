@@ -58,6 +58,12 @@ test("header actions stay inside narrow viewports with compact aligned controls"
   assert.match(css, /\.section-head\{[^}]*flex-wrap:wrap/);
 });
 
+test("mobile metrics use a compact two-column layout", () => {
+  assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.four\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)[^}]*gap:10px/);
+  assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.metric-card\{[^}]*min-height:96px[^}]*padding:12px/);
+  assert.match(css, /@media\(max-width:420px\)[\s\S]*?\.main\{[^}]*padding-inline:10px/);
+});
+
 test("dialogs and API key textarea remain usable across mobile and desktop modes", () => {
   assert.match(css, /text-size-adjust:100%/);
   assert.match(css, /\.field textarea[^}]*font:13px/);
