@@ -44,9 +44,11 @@ test("responsive shell covers tablet phone and narrow phone without losing topol
 
 test("header actions stay inside narrow viewports with compact aligned controls", () => {
   assert.match(page, /context-action/);
-  assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.actions\{[^}]*grid-template-columns:minmax\(0,1fr\) 44px 44px/);
-  assert.match(css, /\.command-trigger\{[^}]*min-width:0/);
-  assert.match(css, /\.command-trigger kbd\{[^}]*margin-left:auto/);
+  assert.match(page, /toggle-group/);
+  assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.actions\{[^}]*display:flex[^}]*flex-wrap:wrap/);
+  assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.command-trigger\{[^}]*flex:0 0 auto/);
+  assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.toggle-group\{[^}]*margin-left:auto/);
+  assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.context-action\{[^}]*width:100%/);
   assert.match(css, /\.context-action\{[^}]*min-width:0/);
   assert.match(css, /@media\(max-width:420px\)[\s\S]*?\.context-action\{[^}]*grid-column:1\/-1/);
   assert.match(css, /\.section-head\{[^}]*flex-wrap:wrap/);

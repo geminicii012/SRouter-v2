@@ -380,9 +380,11 @@ export default function Home() {
           <div className="muted">{tab === "overview" ? t.sub : `SRouter vault v${vault.version} - ${formatDate(vault.updatedAt)}`}</div>
         </div>
         <div className="actions">
-          <button className="btn command-trigger" onClick={() => setCommandOpen(true)}><Command size={16} /><span>Command</span><kbd>{typeof navigator !== "undefined" && navigator.platform.includes("Mac") ? "Cmd" : "Ctrl"} K</kbd></button>
-          <button className="btn icon-btn" onClick={() => setLocale(locale === "id" ? "en" : "id")} title="Language" aria-label="Language"><Languages size={17} /></button>
-          <button className="btn icon-btn" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} title="Theme" aria-label="Theme">{theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}</button>
+          <button className="btn command-trigger" onClick={() => setCommandOpen(true)}><Command size={16} /><kbd>{typeof navigator !== "undefined" && navigator.platform.includes("Mac") ? "Cmd" : "Ctrl"} K</kbd></button>
+          <span className="toggle-group">
+            <button className="btn icon-btn" onClick={() => setLocale(locale === "id" ? "en" : "id")} title="Language" aria-label="Language"><Languages size={17} /></button>
+            <button className="btn icon-btn" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} title="Theme" aria-label="Theme">{theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}</button>
+          </span>
           {tab === "providers" && <button className="btn primary context-action" onClick={() => openProvider()}><Plus size={16} /><span>{t.addProvider}</span></button>}
           {tab === "routes" && <button className="btn primary context-action" onClick={() => openRoute()}><Plus size={16} /><span>{t.addRoute}</span></button>}
           {tab === "models" && <button className="btn context-action" onClick={() => void refreshModels(undefined, true)} disabled={busy === "sync"}>{busy === "sync" ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}<span>Refresh Now</span></button>}
