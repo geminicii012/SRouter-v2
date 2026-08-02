@@ -72,6 +72,15 @@ test("mobile rendering uses low-cost surfaces and skips offscreen dashboard work
   assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.shell:after\{[^}]*mask-image:none/);
 });
 
+test("mobile keeps smooth GPU-friendly operational animations", () => {
+  assert.match(css, /\.health-connector::after\{[^}]*animation:health-flow[^}]*will-change:transform/);
+  assert.match(css, /@keyframes health-flow\{from\{transform:translate3d\(0,0,0\)\}to\{transform:translate3d\(48px,0,0\)\}\}/);
+  assert.match(css, /\.sidebar\{[^}]*transition:transform var\(--motion-med\)/);
+  assert.match(css, /\.spin\{[^}]*animation:spin/);
+  assert.match(css, /\.skeleton\{[^}]*animation:shine/);
+  assert.match(css, /\.toast\{[^}]*animation:toast-in/);
+});
+
 test("dialogs and API key textarea remain usable across mobile and desktop modes", () => {
   assert.match(css, /text-size-adjust:100%/);
   assert.match(css, /\.field textarea[^}]*font:13px/);
