@@ -23,7 +23,8 @@ test("9Router hybrid uses warm coral tokens and restrained grid treatment", () =
   assert.match(css, /--bg:#1a1a1a/i);
   assert.match(css, /\.shell:after\{[^}]*background-image:linear-gradient\(to right,color-mix\(in srgb,var\(--accent\)/);
   assert.match(css, /\.shell:after\{[^}]*background-size:32px 32px/);
-  assert.match(css, /\.shell:after\{[^}]*mask-image:radial-gradient/);
+  assert.match(css, /\.shell:after\{[^}]*z-index:-1[^}]*mask-image:radial-gradient/);
+  assert.match(css, /\.aurora-bg\{[^}]*z-index:-2/);
   assert.match(css, /brand-mark/);
 });
 
