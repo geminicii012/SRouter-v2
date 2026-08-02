@@ -32,6 +32,12 @@ test("responsive shell covers tablet phone and narrow phone without losing topol
   assert.match(css, /@media\(max-width:340px\)/);
   assert.match(css, /\.health-network\{[^}]*overflow-x:auto/);
   assert.match(css, /\.health-network::-webkit-scrollbar\{[^}]*display:none/);
+  assert.match(css, /\.health-segment\{[^}]*flex:0 0 auto/);
+  assert.match(css, /\.health-node\{[^}]*flex:0 0 auto/);
+  assert.match(css, /\.health-connector\{[^}]*flex:0 0 54px/);
+  assert.match(css, /\.health-connector::after\{[^}]*animation:health-flow/);
+  assert.match(css, /@keyframes health-flow/);
+  assert.doesNotMatch(css, /\.health-segment\{[^}]*min-width:0/);
   assert.doesNotMatch(css, /\.health-network\{[^}]*overflow-x:hidden/);
   assert.match(css, /safe-area-inset-bottom/);
 });
