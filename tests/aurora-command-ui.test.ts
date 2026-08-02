@@ -53,8 +53,8 @@ test("responsive shell supports desktop tablet and phone navigation", () => {
 test("production visual identity uses restrained engineering colors and a routing brand mark", () => {
   assert.match(page, /brand-mark/);
   assert.match(page, /brand-node/);
-  assert.match(css, /--accent:#4f8cff/);
-  assert.match(css, /--accent2:#58b7b2/);
+  assert.match(css, /--accent:#e56a4a/);
+  assert.match(css, /--accent2:#4f8cff/);
   assert.match(css, /\.brand-mark/);
   assert.doesNotMatch(css, /linear-gradient\(135deg,var\(--accent\),var\(--accent3\)\)/);
 });

@@ -99,7 +99,7 @@ export default function Home() {
         event.preventDefault();
         setCommandOpen((open) => !open);
       }
-      if (event.key === "Escape") setCommandOpen(false);
+      if (event.key === "Escape") { setCommandOpen(false); setProviderModal(false); setRouteModal(false); setMobileNavOpen(false); }
     }
     window.addEventListener("keydown", handleCommandShortcut);
     return () => window.removeEventListener("keydown", handleCommandShortcut);
@@ -367,6 +367,7 @@ export default function Home() {
   if (!vault) return <main className="setup aurora-shell"><AuroraBackground /><section className="setup-card"><BrandMark /><h1>{setup ? t.unlock : t.setup}</h1><p className="muted">{t.secretHelp}</p><div className="form"><Field label="Router Secret"><input type="password" value={secret} onChange={(event) => setSecret(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void unlock(!setup)} /></Field>{error && <div className="error">{error}</div>}<button className="btn primary" onClick={() => void unlock(!setup)} disabled={busy === "unlock"}>{busy === "unlock" && <Loader2 size={16} className="spin" />}{t.continue}</button></div></section>{toast && <ToastView toast={toast} />}</main>;
 
   return <div className="shell aurora-shell"><AuroraBackground />
+    <button className={`nav-backdrop ${mobileNavOpen ? "show" : ""}`} onClick={() => setMobileNavOpen(false)} aria-label="Close navigation" tabIndex={mobileNavOpen ? 0 : -1} />
     <aside className={`sidebar ${mobileNavOpen ? "open" : ""}`}>
       <div className="brand"><BrandMark /><div><strong>SRouter</strong><span>Aurora Command</span></div></div>
       <nav className="nav" aria-label="Primary navigation">{nav.map(({ id, Icon, label }) => <button key={id} className={tab === id ? "active" : ""} onClick={() => { setTab(id); setMobileNavOpen(false); }}><Icon size={18} />{label}</button>)}</nav>
