@@ -1,11 +1,42 @@
 "use client";
+
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
-  Activity, Boxes, CheckCircle2, ChevronDown, ChevronRight, ChevronsUpDown, Cloud, Edit3,
-  Languages, Loader2, Plus, RefreshCw, Route as RouteIcon, ScrollText, Search, Settings,
-  ShieldCheck, Star, Trash2, XCircle,
+  Activity,
+  ArrowRight,
+  Boxes,
+  CheckCircle2,
+  ChevronDown,
+  ChevronsUpDown,
+  Cloud,
+  Command,
+  Edit3,
+  Languages,
+  Loader2,
+  Menu,
+  Moon,
+  Network,
+  PanelRightOpen,
+  Plus,
+  RefreshCw,
+  Route as RouteIcon,
+  ScrollText,
+  Search,
+  Server,
+  Settings,
+  ShieldCheck,
+  Sparkles,
+  Star,
+  Sun,
+  Trash2,
+  X,
+  XCircle,
+  Zap,
+  type LucideIcon,
 } from "lucide-react";
 
+type Locale = "id" | "en";
+type Tab = "overview" | "providers" | "models" | "routes" | "logs" | "relay" | "settings";
 type Key = { id: string; label: string; value: string; enabled: boolean };
 type Relay = { id: string; name: string; url: string; secret: string; enabled: boolean; region?: string };
 type OAuth = { authorizeUrl: string; tokenUrl: string; clientId: string; clientSecret: string; scopes: string; accessToken?: string; refreshToken?: string; expiresAt?: number };
@@ -13,79 +44,122 @@ type ModelSync = { lastSync?: string; status?: "idle" | "success" | "error"; err
 type Provider = { id: string; name: string; baseUrl: string; format: "openai" | "anthropic" | "gemini"; keys: Key[]; models: string[]; capabilities: string[]; enabled: boolean; headers?: Record<string, string>; relays?: Relay[]; relayMode?: "direct" | "prefer" | "only"; timeoutMs?: number; oauth?: OAuth; modelSync?: ModelSync };
 type Target = { providerId: string; model: string; priority?: number; retry?: number; timeoutMs?: number };
 type CatalogModel = { id: string; providerId: string; providerName: string; model: string; displayName: string; favorite: boolean; source: "provider" | "route" };
-type Vault = { version: number; locale: "id" | "en"; providers: Provider[]; routes: Record<string, Target[]>; logging: boolean; logLimit: number; updatedAt: string; modelFavorites?: string[] };
+type Vault = { version: number; locale: Locale; providers: Provider[]; routes: Record<string, Target[]>; logging: boolean; logLimit: number; updatedAt: string; modelFavorites?: string[] };
 type Log = { at: string; provider: string; model: string; status: number; latency: number; error?: string };
 type Busy = "" | "unlock" | "save-provider" | "detect" | "sync" | "save-route" | "catalog";
+type Toast = { type: "success" | "error"; text: string };
+type ProviderDraft = { id: string; name: string; baseUrl: string; format: Provider["format"]; keys: string; models: string; capabilities: string; enabled: boolean; headers: string; relays: string; relayMode: NonNullable<Provider["relayMode"]>; timeoutMs: number; oauthEnabled: boolean; authorizeUrl: string; tokenUrl: string; clientId: string; clientSecret: string; scopes: string };
+type RouteDraft = { originalAlias: string; alias: string; targets: Target[] };
+type Copy = typeof text.en;
 
-const emptyDraft = { id: "", name: "", baseUrl: "", format: "openai" as const, keys: "Primary:", models: "", capabilities: "chat,responses,embeddings,images,speech,transcription", enabled: true, headers: "", relays: "", relayMode: "direct" as const, timeoutMs: 120000, oauthEnabled: false, authorizeUrl: "", tokenUrl: "", clientId: "", clientSecret: "", scopes: "" };
+const emptyDraft: ProviderDraft = { id: "", name: "", baseUrl: "", format: "openai", keys: "Primary:", models: "", capabilities: "chat,responses,embeddings,images,speech,transcription", enabled: true, headers: "", relays: "", relayMode: "direct", timeoutMs: 120000, oauthEnabled: false, authorizeUrl: "", tokenUrl: "", clientId: "", clientSecret: "", scopes: "" };
 const emptyTarget = (): Target => ({ providerId: "", model: "", priority: 1, retry: 0, timeoutMs: 120000 });
-const emptyRouteDraft = { originalAlias: "", alias: "", targets: [emptyTarget()] };
-const text = { id: { control: "Pusat kendali", sub: "Kelola provider, model, route, dan fallback dari satu tempat.", overview: "Ringkasan", providers: "Provider", models: "Models", routes: "Rute", logs: "Log", relay: "Relay", settings: "Pengaturan", addProvider: "Tambah provider", active: "Provider aktif", modelCount: "Model katalog", routeCount: "Rute fallback", requests: "Request terbaru", emptyProvider: "Belum ada provider.", emptyRoute: "Belum ada alias rute.", save: "Simpan", cancel: "Batal", test: "Tes", edit: "Edit", remove: "Hapus", addRoute: "Tambah rute", clear: "Hapus log", sync: "Sinkronkan", setup: "Siapkan SRouter", unlock: "Buka SRouter", continue: "Lanjutkan", secretHelp: "Router Secret minimal 16 karakter dan tidak dapat dipulihkan.", connect: "Hubungkan OAuth", disconnect: "Putuskan OAuth", healthy: "Aktif", disabled: "Nonaktif" }, en: { control: "Control center", sub: "Manage providers, models, routes, and fallback in one place.", overview: "Overview", providers: "Providers", models: "Models", routes: "Routes", logs: "Logs", relay: "Relay", settings: "Settings", addProvider: "Add provider", active: "Active providers", modelCount: "Catalog models", routeCount: "Fallback routes", requests: "Recent requests", emptyProvider: "No providers yet.", emptyRoute: "No route aliases yet.", save: "Save", cancel: "Cancel", test: "Test", edit: "Edit", remove: "Delete", addRoute: "Add route", clear: "Clear logs", sync: "Sync", setup: "Set up SRouter", unlock: "Unlock SRouter", continue: "Continue", secretHelp: "Router Secret must be at least 16 characters and cannot be recovered.", connect: "Connect OAuth", disconnect: "Disconnect OAuth", healthy: "Active", disabled: "Disabled" } };
+const emptyRouteDraft = (): RouteDraft => ({ originalAlias: "", alias: "", targets: [emptyTarget()] });
+const text = {
+  id: { control: "Pusat kendali", sub: "Monitor dan operasikan provider, model, route, dan relay dari satu command surface.", overview: "Ringkasan", providers: "Provider", models: "Models", routes: "Rute", logs: "Log", relay: "Relay", settings: "Pengaturan", addProvider: "Tambah provider", active: "Provider aktif", modelCount: "Model katalog", routeCount: "Rute fallback", requests: "Request terbaru", emptyProvider: "Belum ada provider.", emptyRoute: "Belum ada alias rute.", save: "Simpan", cancel: "Batal", test: "Tes", edit: "Edit", remove: "Hapus", addRoute: "Tambah rute", clear: "Hapus log", sync: "Sinkronkan", setup: "Siapkan SRouter", unlock: "Buka SRouter", continue: "Lanjutkan", secretHelp: "Router Secret minimal 16 karakter dan tidak dapat dipulihkan.", connect: "Hubungkan OAuth", disconnect: "Putuskan OAuth", healthy: "Aktif", disabled: "Nonaktif" },
+  en: { control: "Aurora Command", sub: "Monitor and operate providers, models, routes, and relay fabric from one command surface.", overview: "Overview", providers: "Providers", models: "Models", routes: "Routes", logs: "Logs", relay: "Relay", settings: "Settings", addProvider: "Add provider", active: "Active providers", modelCount: "Catalog models", routeCount: "Fallback routes", requests: "Recent requests", emptyProvider: "No providers yet.", emptyRoute: "No route aliases yet.", save: "Save", cancel: "Cancel", test: "Test", edit: "Edit", remove: "Delete", addRoute: "Add route", clear: "Clear logs", sync: "Sync", setup: "Set up SRouter", unlock: "Unlock SRouter", continue: "Continue", secretHelp: "Router Secret must be at least 16 characters and cannot be recovered.", connect: "Connect OAuth", disconnect: "Disconnect OAuth", healthy: "Active", disabled: "Disabled" },
+};
 
 export default function Home() {
-  const [locale, setLocale] = useState<"id" | "en">("id");
+  const [locale, setLocale] = useState<Locale>("id");
   const [theme, setTheme] = useState("dark");
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState<Tab>("overview");
   const [secret, setSecret] = useState("");
   const [setup, setSetup] = useState<boolean | null>(null);
   const [vault, setVault] = useState<Vault | null>(null);
   const [error, setError] = useState("");
-  const [toast, setToast] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
   const [providerModal, setProviderModal] = useState(false);
   const [routeModal, setRouteModal] = useState(false);
-  const [draft, setDraft] = useState<any>(emptyDraft);
-  const [routeDraft, setRouteDraft] = useState<any>(emptyRouteDraft);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [commandQuery, setCommandQuery] = useState("");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [draft, setDraft] = useState<ProviderDraft>(emptyDraft);
+  const [routeDraft, setRouteDraft] = useState<RouteDraft>(emptyRouteDraft);
   const [logs, setLogs] = useState<Log[]>([]);
-  const [sync, setSync] = useState<any>(null);
+  const [sync, setSync] = useState<Record<string, unknown> | null>(null);
   const [catalog, setCatalog] = useState<CatalogModel[]>([]);
   const [modelQuery, setModelQuery] = useState("");
   const [providerFilter, setProviderFilter] = useState("all");
   const [busy, setBusy] = useState<Busy>("");
   const [detectStatus, setDetectStatus] = useState("");
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [inspectedProviderId, setInspectedProviderId] = useState<string>("");
   const autoSyncing = useRef(false);
   const t = text[locale];
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    fetch("/api/setup").then((x) => x.json()).then((x) => setSetup(x.setup));
+    fetch("/api/setup").then((x) => x.json() as Promise<{ setup: boolean }>).then((x) => setSetup(x.setup));
   }, [theme]);
 
-  useEffect(() => { if (vault && tab === "logs") loadLogs(); }, [tab, vault]);
-  useEffect(() => { if (vault) loadCatalog(true); }, [vault?.version, modelQuery, providerFilter]);
+  useEffect(() => {
+    function handleCommandShortcut(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setCommandOpen((open) => !open);
+      }
+      if (event.key === "Escape") setCommandOpen(false);
+    }
+    window.addEventListener("keydown", handleCommandShortcut);
+    return () => window.removeEventListener("keydown", handleCommandShortcut);
+  }, []);
 
-  function notify(text: string, type: "success" | "error" = "success") {
-    setToast({ text, type });
-    setTimeout(() => setToast(null), 2600);
+  useEffect(() => {
+    if (!commandOpen && !providerModal && !routeModal) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [commandOpen, providerModal, routeModal]);
+
+  useEffect(() => { if (vault && tab === "logs") void loadLogs(); }, [tab, vault]);
+  useEffect(() => { if (vault) void loadCatalog(true); }, [vault?.version, modelQuery, providerFilter]);
+  useEffect(() => {
+    if (!vault?.providers.length) setInspectedProviderId("");
+    else if (!inspectedProviderId || !vault.providers.some((provider) => provider.id === inspectedProviderId)) setInspectedProviderId(vault.providers[0].id);
+  }, [vault, inspectedProviderId]);
+
+  function notify(message: string, type: Toast["type"] = "success") {
+    setToast({ text: message, type });
+    window.setTimeout(() => setToast(null), 2600);
   }
-  function lines(s: string) { return s.split("\n").map((x) => x.trim()).filter(Boolean); }
-  function providerName(id: string) { return vault?.providers.find((p) => p.id === id)?.name || "Missing provider"; }
+  function lines(value: string) { return value.split("\n").map((line) => line.trim()).filter(Boolean); }
+  function providerName(id: string) { return vault?.providers.find((provider) => provider.id === id)?.name || "Missing provider"; }
   function formatDate(value?: string) { return value ? new Date(value).toLocaleString() : "Never"; }
 
   async function unlock(create = false) {
-    setBusy("unlock"); setError("");
-    const x = await fetch(create ? "/api/setup" : "/api/vault", { method: create ? "POST" : "GET", headers: { "content-type": "application/json", "x-router-secret": secret }, body: create ? JSON.stringify({ secret }) : undefined });
-    const j = await x.json(); setBusy("");
-    if (!x.ok) return setError(j.error);
-    setVault(j.vault); setSetup(true);
+    setBusy("unlock");
+    setError("");
+    const response = await fetch(create ? "/api/setup" : "/api/vault", { method: create ? "POST" : "GET", headers: { "content-type": "application/json", "x-router-secret": secret }, body: create ? JSON.stringify({ secret }) : undefined });
+    const payload = await response.json() as { vault?: Vault; error?: string };
+    setBusy("");
+    if (!response.ok || !payload.vault) return setError(payload.error || "Unlock failed");
+    setVault(payload.vault);
+    setSetup(true);
+    setLocale(payload.vault.locale || locale);
   }
 
   async function persist(next: Vault) {
-    const x = await fetch("/api/vault", { method: "PUT", headers: { "content-type": "application/json", "x-router-secret": secret }, body: JSON.stringify({ vault: next, expectedVersion: vault?.version }) });
-    const j = await x.json();
-    if (!x.ok) { setError(j.error); notify(j.error || "Save failed", "error"); return false; }
-    setVault(j.vault); return true;
+    const response = await fetch("/api/vault", { method: "PUT", headers: { "content-type": "application/json", "x-router-secret": secret }, body: JSON.stringify({ vault: next, expectedVersion: vault?.version }) });
+    const payload = await response.json() as { vault?: Vault; error?: string };
+    if (!response.ok || !payload.vault) {
+      setError(payload.error || "Save failed");
+      notify(payload.error || "Save failed", "error");
+      return false;
+    }
+    setVault(payload.vault);
+    return true;
   }
 
   async function loadCatalog(background = false) {
     if (!vault) return;
     if (!background) setBusy("catalog");
-    const q = new URLSearchParams({ q: modelQuery, provider: providerFilter });
-    const x = await fetch(`/api/catalog?${q}`, { headers: { "x-router-secret": secret } });
-    const j = await x.json();
-    if (x.ok) {
-      setCatalog(j.models || []);
-      if (background && j.expiredProviders?.length && !autoSyncing.current) {
+    const query = new URLSearchParams({ q: modelQuery, provider: providerFilter });
+    const response = await fetch(`/api/catalog?${query}`, { headers: { "x-router-secret": secret } });
+    const payload = await response.json() as { models?: CatalogModel[]; expiredProviders?: string[] };
+    if (response.ok) {
+      setCatalog(payload.models || []);
+      if (background && payload.expiredProviders?.length && !autoSyncing.current) {
         autoSyncing.current = true;
         await refreshModels(undefined, false, true);
         autoSyncing.current = false;
@@ -95,134 +169,325 @@ export default function Home() {
   }
 
   function providerFromDraft(): Provider {
-    const old = vault?.providers.find((p) => p.id === draft.id);
-    const keys = lines(draft.keys).map((x, i) => {
-      const n = x.indexOf(":");
-      return { id: old?.keys[i]?.id || crypto.randomUUID(), label: n > 0 ? x.slice(0, n) : `Key ${i + 1}`, value: n > 0 ? x.slice(n + 1) : x, enabled: true };
+    const old = vault?.providers.find((provider) => provider.id === draft.id);
+    const keys = lines(draft.keys).map((line, index) => {
+      const separator = line.indexOf(":");
+      return { id: old?.keys[index]?.id || crypto.randomUUID(), label: separator > 0 ? line.slice(0, separator) : `Key ${index + 1}`, value: separator > 0 ? line.slice(separator + 1) : line, enabled: true };
     });
-    const relays = lines(draft.relays).map((x, i) => {
-      const [name, url, relaySecret, region] = x.split("|");
-      return { id: old?.relays?.[i]?.id || crypto.randomUUID(), name: name || `Relay ${i + 1}`, url: url || "", secret: relaySecret || "", region: region || "global", enabled: true };
-    }).filter((x) => x.url);
-    const headers = Object.fromEntries(lines(draft.headers).map((x) => {
-      const n = x.indexOf(":");
-      return n > 0 ? [x.slice(0, n).trim(), x.slice(n + 1).trim()] : ["", ""];
-    }).filter((x) => x[0]));
+    const relays = lines(draft.relays).map((line, index) => {
+      const [name, url, relaySecret, region] = line.split("|");
+      return { id: old?.relays?.[index]?.id || crypto.randomUUID(), name: name || `Relay ${index + 1}`, url: url || "", secret: relaySecret || "", region: region || "global", enabled: true };
+    }).filter((relay) => relay.url);
+    const headers: Record<string, string> = {};
+    for (const line of lines(draft.headers)) {
+      const separator = line.indexOf(":");
+      if (separator > 0) headers[line.slice(0, separator).trim()] = line.slice(separator + 1).trim();
+    }
     const oauth = draft.oauthEnabled ? { authorizeUrl: draft.authorizeUrl, tokenUrl: draft.tokenUrl, clientId: draft.clientId, clientSecret: draft.clientSecret, scopes: draft.scopes, accessToken: old?.oauth?.accessToken, refreshToken: old?.oauth?.refreshToken, expiresAt: old?.oauth?.expiresAt } : undefined;
-    return { id: draft.id || crypto.randomUUID(), name: draft.name, baseUrl: draft.baseUrl.replace(/\/$/, ""), format: draft.format, keys, models: draft.models.split(",").map((x: string) => x.trim()).filter(Boolean), capabilities: draft.capabilities.split(",").map((x: string) => x.trim()).filter(Boolean), enabled: draft.enabled, headers, relays, relayMode: draft.relayMode, timeoutMs: Number(draft.timeoutMs) || 120000, oauth, modelSync: old?.modelSync };
+    return { id: draft.id || crypto.randomUUID(), name: draft.name, baseUrl: draft.baseUrl.replace(/\/$/, ""), format: draft.format, keys, models: draft.models.split(",").map((item) => item.trim()).filter(Boolean), capabilities: draft.capabilities.split(",").map((item) => item.trim()).filter(Boolean), enabled: draft.enabled, headers, relays, relayMode: draft.relayMode, timeoutMs: Number(draft.timeoutMs) || 120000, oauth, modelSync: old?.modelSync };
   }
 
-  function openProvider(p?: Provider) {
-    setDetectStatus(""); setError("");
-    if (!p) setDraft(emptyDraft);
-    else setDraft({ id: p.id, name: p.name, baseUrl: p.baseUrl, format: p.format, keys: p.keys.map((k) => `${k.label}:${k.value}`).join("\n"), models: p.models.join(","), capabilities: (p.capabilities || ["chat"]).join(","), enabled: p.enabled, headers: Object.entries(p.headers || {}).map(([k, v]) => `${k}:${v}`).join("\n"), relays: (p.relays || []).map((x) => `${x.name}|${x.url}|${x.secret}|${x.region || "global"}`).join("\n"), relayMode: p.relayMode || "direct", timeoutMs: p.timeoutMs || 120000, oauthEnabled: Boolean(p.oauth), authorizeUrl: p.oauth?.authorizeUrl || "", tokenUrl: p.oauth?.tokenUrl || "", clientId: p.oauth?.clientId || "", clientSecret: p.oauth?.clientSecret || "", scopes: p.oauth?.scopes || "" });
+  function openProvider(provider?: Provider) {
+    setDetectStatus("");
+    setError("");
+    if (!provider) setDraft(emptyDraft);
+    else {
+      setInspectedProviderId(provider.id);
+      setDraft({ id: provider.id, name: provider.name, baseUrl: provider.baseUrl, format: provider.format, keys: provider.keys.map((key) => `${key.label}:${key.value}`).join("\n"), models: provider.models.join(","), capabilities: (provider.capabilities || ["chat"]).join(","), enabled: provider.enabled, headers: Object.entries(provider.headers || {}).map(([key, value]) => `${key}:${value}`).join("\n"), relays: (provider.relays || []).map((relay) => `${relay.name}|${relay.url}|${relay.secret}|${relay.region || "global"}`).join("\n"), relayMode: provider.relayMode || "direct", timeoutMs: provider.timeoutMs || 120000, oauthEnabled: Boolean(provider.oauth), authorizeUrl: provider.oauth?.authorizeUrl || "", tokenUrl: provider.oauth?.tokenUrl || "", clientId: provider.oauth?.clientId || "", clientSecret: provider.oauth?.clientSecret || "", scopes: provider.oauth?.scopes || "" });
+    }
     setProviderModal(true);
   }
 
   async function detectModels() {
     const provider = providerFromDraft();
     if (!provider.name || !provider.baseUrl) return setDetectStatus("Nama dan Base URL wajib diisi");
-    setBusy("detect"); setDetectStatus("");
+    setBusy("detect");
+    setDetectStatus("");
     const token = provider.keys.find((item) => item.enabled)?.value;
-    const x = await fetch("/api/providers/detect", { method: "POST", headers: { "content-type": "application/json", "x-router-secret": secret }, body: JSON.stringify({ provider, token }) });
-    const j = await x.json(); setBusy("");
-    if (!x.ok || !j.ok) { setDetectStatus(j.error || "Detect models gagal. Gunakan input manual."); return notify(j.error || "Detect models gagal", "error"); }
-    setDraft({ ...draft, models: j.models.join(",") });
-    setDetectStatus(`${j.count} models detected`);
-    notify(`${j.count} models detected`);
+    const response = await fetch("/api/providers/detect", { method: "POST", headers: { "content-type": "application/json", "x-router-secret": secret }, body: JSON.stringify({ provider, token }) });
+    const payload = await response.json() as { ok?: boolean; models?: string[]; count?: number; error?: string };
+    setBusy("");
+    if (!response.ok || !payload.ok || !payload.models) {
+      setDetectStatus(payload.error || "Detect models gagal. Gunakan input manual.");
+      return notify(payload.error || "Detect models gagal", "error");
+    }
+    setDraft({ ...draft, models: payload.models.join(",") });
+    setDetectStatus(`${payload.count || payload.models.length} models detected`);
+    notify(`${payload.count || payload.models.length} models detected`);
   }
 
   async function saveProvider() {
     if (!vault || !draft.name || !draft.baseUrl) return setError("Nama dan Base URL wajib diisi");
     setBusy("save-provider");
     const provider = providerFromDraft();
-    const list = draft.id ? vault.providers.map((x) => x.id === draft.id ? provider : x) : [...vault.providers, provider];
-    if (await persist({ ...vault, providers: list })) { setProviderModal(false); notify(locale === "id" ? "Provider disimpan" : "Provider saved"); }
+    const providers = draft.id ? vault.providers.map((item) => item.id === draft.id ? provider : item) : [...vault.providers, provider];
+    if (await persist({ ...vault, providers })) {
+      setProviderModal(false);
+      setInspectedProviderId(provider.id);
+      notify(locale === "id" ? "Provider disimpan" : "Provider saved");
+    }
     setBusy("");
   }
 
   async function refreshModels(providerId?: string, force = true, quiet = false) {
     setBusy("sync");
-    const x = await fetch("/api/providers/sync", { method: "POST", headers: { "content-type": "application/json", "x-router-secret": secret }, body: JSON.stringify({ providerId, force }) });
-    const j = await x.json(); setBusy("");
-    if (!x.ok) { if (!quiet) notify(j.error || "Sync failed", "error"); return; }
-    setVault(j.vault);
-    const errors = (j.results || []).filter((r: any) => r.status === "error");
-    if (!quiet) notify(errors.length ? errors[0].error : "Models synced", errors.length ? "error" : "success");
+    const response = await fetch("/api/providers/sync", { method: "POST", headers: { "content-type": "application/json", "x-router-secret": secret }, body: JSON.stringify({ providerId, force }) });
+    const payload = await response.json() as { vault?: Vault; results?: { status?: string; error?: string }[]; error?: string };
+    setBusy("");
+    if (!response.ok || !payload.vault) {
+      if (!quiet) notify(payload.error || "Sync failed", "error");
+      return;
+    }
+    setVault(payload.vault);
+    const errors = (payload.results || []).filter((result) => result.status === "error");
+    if (!quiet) notify(errors.length ? errors[0].error || "Sync failed" : "Models synced", errors.length ? "error" : "success");
   }
 
   async function removeProvider(id: string) {
-    if (!vault || !confirm(locale === "id" ? "Hapus provider dan rute terkait?" : "Delete provider and related routes?")) return;
-    await persist({ ...vault, providers: vault.providers.filter((p) => p.id !== id), routes: Object.fromEntries(Object.entries(vault.routes).map(([k, a]) => [k, a.filter((x) => x.providerId !== id)]).filter(([, a]) => a.length)) });
+    if (!vault || !window.confirm(locale === "id" ? "Hapus provider dan rute terkait?" : "Delete provider and related routes?")) return;
+    const routes = Object.fromEntries(Object.entries(vault.routes).map(([alias, targets]) => [alias, targets.filter((target) => target.providerId !== id)]).filter(([, targets]) => targets.length));
+    await persist({ ...vault, providers: vault.providers.filter((provider) => provider.id !== id), routes });
   }
-  async function testProvider(id: string) { const x = await fetch("/api/test-provider", { method: "POST", headers: { "content-type": "application/json", "x-router-secret": secret }, body: JSON.stringify({ providerId: id }) }), j = await x.json(); notify(j.ok ? `OK · ${j.latency} ms` : j.error || `HTTP ${j.status}`, j.ok ? "success" : "error"); }
-  async function oauth(id: string, disconnect = false) { const x = await fetch(disconnect ? "/api/oauth/disconnect" : "/api/oauth/start", { method: "POST", headers: { "content-type": "application/json", "x-router-secret": secret }, body: JSON.stringify({ providerId: id }) }), j = await x.json(); if (!x.ok) return notify(j.error, "error"); if (disconnect) setVault(j.vault); else location.href = j.url; }
+
+  async function testProvider(id: string) {
+    const response = await fetch("/api/test-provider", { method: "POST", headers: { "content-type": "application/json", "x-router-secret": secret }, body: JSON.stringify({ providerId: id }) });
+    const payload = await response.json() as { ok?: boolean; latency?: number; status?: number; error?: string };
+    notify(payload.ok ? `OK - ${payload.latency} ms` : payload.error || `HTTP ${payload.status}`, payload.ok ? "success" : "error");
+  }
+
+  async function oauth(id: string, disconnect = false) {
+    const response = await fetch(disconnect ? "/api/oauth/disconnect" : "/api/oauth/start", { method: "POST", headers: { "content-type": "application/json", "x-router-secret": secret }, body: JSON.stringify({ providerId: id }) });
+    const payload = await response.json() as { vault?: Vault; url?: string; error?: string };
+    if (!response.ok) return notify(payload.error || "OAuth failed", "error");
+    if (disconnect && payload.vault) setVault(payload.vault);
+    else if (payload.url) window.location.href = payload.url;
+  }
 
   function openRoute(alias?: string) {
     setError("");
-    if (!vault || !alias) setRouteDraft(emptyRouteDraft);
+    if (!vault || !alias) setRouteDraft(emptyRouteDraft());
     else setRouteDraft({ originalAlias: alias, alias, targets: vault.routes[alias].map((target, index) => ({ priority: index + 1, retry: 0, timeoutMs: 120000, ...target })) });
     setRouteModal(true);
   }
+
   function patchTarget(index: number, patch: Partial<Target>) {
-    const targets = [...routeDraft.targets]; targets[index] = { ...targets[index], ...patch };
+    const targets = [...routeDraft.targets];
+    targets[index] = { ...targets[index], ...patch };
     if (patch.providerId) targets[index].model = "";
     setRouteDraft({ ...routeDraft, targets });
   }
+
   function moveTarget(from: number, to: number) {
     if (to < 0 || to >= routeDraft.targets.length) return;
-    const targets = [...routeDraft.targets]; const [item] = targets.splice(from, 1); targets.splice(to, 0, item);
+    const targets = [...routeDraft.targets];
+    const [item] = targets.splice(from, 1);
+    targets.splice(to, 0, item);
     setRouteDraft({ ...routeDraft, targets: targets.map((target, index) => ({ ...target, priority: index + 1 })) });
   }
+
   async function saveRoute() {
     if (!vault || !routeDraft.alias) return;
-    const targets = routeDraft.targets.filter((x: Target) => x.providerId && x.model).map((x: Target, index: number) => ({ ...x, priority: Number(x.priority) || index + 1, retry: Math.max(0, Number(x.retry) || 0), timeoutMs: Number(x.timeoutMs) || undefined }));
+    const targets = routeDraft.targets.filter((target) => target.providerId && target.model).map((target, index) => ({ ...target, priority: Number(target.priority) || index + 1, retry: Math.max(0, Number(target.retry) || 0), timeoutMs: Number(target.timeoutMs) || undefined }));
     if (!targets.length) return setError("Minimal satu target");
     setBusy("save-route");
     const routes = { ...vault.routes };
     if (routeDraft.originalAlias && routeDraft.originalAlias !== routeDraft.alias) delete routes[routeDraft.originalAlias];
     routes[routeDraft.alias] = targets;
-    if (await persist({ ...vault, routes })) { setRouteModal(false); notify("Route saved"); }
+    if (await persist({ ...vault, routes })) {
+      setRouteModal(false);
+      notify("Route saved");
+    }
     setBusy("");
   }
-  async function deleteRoute(alias: string) { if (!vault) return; const routes = { ...vault.routes }; delete routes[alias]; await persist({ ...vault, routes }); }
-  async function toggleFavorite(item: CatalogModel) {
-    const x = await fetch("/api/catalog/favorite", { method: "POST", headers: { "content-type": "application/json", "x-router-secret": secret }, body: JSON.stringify({ modelId: item.id, favorite: !item.favorite }) });
-    const j = await x.json();
-    if (!x.ok) return notify(j.error || "Favorite failed", "error");
-    setVault(j.vault); notify(item.favorite ? "Removed from favorites" : "Added to favorites");
+
+  async function deleteRoute(alias: string) {
+    if (!vault) return;
+    const routes = { ...vault.routes };
+    delete routes[alias];
+    await persist({ ...vault, routes });
   }
-  async function loadLogs() { const x = await fetch("/api/logs", { headers: { "x-router-secret": secret } }), j = await x.json(); if (x.ok) setLogs(j.logs); }
-  async function clearLogs() { await fetch("/api/logs", { method: "DELETE", headers: { "x-router-secret": secret } }); setLogs([]); }
-  async function checkSync() { const x = await fetch("/api/sync", { headers: { "x-router-secret": secret } }), j = await x.json(); setSync(j); }
 
-  const metrics = useMemo(() => ({ providers: vault?.providers.filter((x) => x.enabled).length || 0, models: catalog.length || vault?.providers.reduce((n, p) => n + p.models.length, 0) || 0, routes: Object.keys(vault?.routes || {}).length, relays: vault?.providers.reduce((n, p) => n + (p.relays?.length || 0), 0) || 0 }), [vault, catalog]);
-  const nav = [["overview", Activity, t.overview], ["providers", Boxes, t.providers], ["models", Search, t.models], ["routes", RouteIcon, t.routes], ["logs", ScrollText, t.logs], ["relay", Cloud, t.relay], ["settings", Settings, t.settings]] as const;
+  async function toggleFavorite(item: CatalogModel) {
+    const response = await fetch("/api/catalog/favorite", { method: "POST", headers: { "content-type": "application/json", "x-router-secret": secret }, body: JSON.stringify({ modelId: item.id, favorite: !item.favorite }) });
+    const payload = await response.json() as { vault?: Vault; error?: string };
+    if (!response.ok || !payload.vault) return notify(payload.error || "Favorite failed", "error");
+    setVault(payload.vault);
+    notify(item.favorite ? "Removed from favorites" : "Added to favorites");
+  }
+
+  async function loadLogs() {
+    const response = await fetch("/api/logs", { headers: { "x-router-secret": secret } });
+    const payload = await response.json() as { logs?: Log[] };
+    if (response.ok) setLogs(payload.logs || []);
+  }
+
+  async function clearLogs() {
+    await fetch("/api/logs", { method: "DELETE", headers: { "x-router-secret": secret } });
+    setLogs([]);
+  }
+
+  async function checkSync() {
+    const response = await fetch("/api/sync", { headers: { "x-router-secret": secret } });
+    const payload = await response.json() as Record<string, unknown>;
+    setSync(payload);
+  }
+
+  async function testRelay(url: string) {
+    const response = await fetch("/api/relay-health", { method: "POST", headers: { "content-type": "application/json", "x-router-secret": secret }, body: JSON.stringify({ url }) });
+    const payload = await response.json() as { ok?: boolean; latency?: number; status?: number; error?: string };
+    notify(payload.ok ? `Relay OK - ${payload.latency} ms` : payload.error || `HTTP ${payload.status}`, payload.ok ? "success" : "error");
+  }
+
+  const metrics = useMemo(() => ({ providers: vault?.providers.filter((provider) => provider.enabled).length || 0, models: catalog.length || vault?.providers.reduce((count, provider) => count + provider.models.length, 0) || 0, routes: Object.keys(vault?.routes || {}).length, relays: vault?.providers.reduce((count, provider) => count + (provider.relays?.length || 0), 0) || 0 }), [vault, catalog]);
+  const nav = useMemo<{ id: Tab; Icon: LucideIcon; label: string }[]>(() => [
+    { id: "overview", Icon: Activity, label: t.overview },
+    { id: "providers", Icon: Boxes, label: t.providers },
+    { id: "models", Icon: Search, label: t.models },
+    { id: "routes", Icon: RouteIcon, label: t.routes },
+    { id: "logs", Icon: ScrollText, label: t.logs },
+    { id: "relay", Icon: Cloud, label: t.relay },
+    { id: "settings", Icon: Settings, label: t.settings },
+  ], [t]);
+  const inspectedProvider = vault?.providers.find((provider) => provider.id === inspectedProviderId) || vault?.providers[0];
   const filteredProviders = vault?.providers || [];
+  const relayItems = vault?.providers.flatMap((provider) => (provider.relays || []).map((relay) => ({ provider, relay }))) || [];
+  const commandActions = useMemo(() => [
+    { id: "overview", label: "Open overview", hint: "Monitor control plane", Icon: Activity, run: () => setTab("overview") },
+    { id: "providers", label: "Navigate providers", hint: "Provider health and credentials", Icon: Boxes, run: () => setTab("providers") },
+    { id: "add-provider", label: t.addProvider, hint: "Create a provider", Icon: Plus, run: () => { setTab("providers"); openProvider(); } },
+    { id: "models", label: "Open model catalog", hint: "Search and favorite models", Icon: Search, run: () => setTab("models") },
+    { id: "routes", label: "Navigate routes", hint: "Fallback chains", Icon: RouteIcon, run: () => setTab("routes") },
+    { id: "add-route", label: t.addRoute, hint: "Create a route alias", Icon: Network, run: () => { setTab("routes"); openRoute(); } },
+    { id: "logs", label: "Open logs", hint: "Request metadata", Icon: ScrollText, run: () => setTab("logs") },
+    { id: "sync", label: "Sync provider models", hint: "Refresh OpenAI-compatible catalogs", Icon: RefreshCw, run: () => void refreshModels(undefined, true) },
+  ], [t, vault, routeDraft]);
+  const visibleCommands = commandActions.filter((action) => `${action.label} ${action.hint}`.toLowerCase().includes(commandQuery.toLowerCase()));
 
-  if (setup === null) return <main className="setup"><div className="skeleton setup-card" /></main>;
-  if (!vault) return <main className="setup"><section className="setup-card"><div className="logo">S</div><h1>{setup ? t.unlock : t.setup}</h1><p className="muted">{t.secretHelp}</p><div className="form"><Field label="Router Secret"><input type="password" value={secret} onChange={(e) => setSecret(e.target.value)} onKeyDown={(e) => e.key === "Enter" && unlock(!setup)} /></Field>{error && <div className="error">{error}</div>}<button className="btn primary" onClick={() => unlock(!setup)} disabled={busy === "unlock"}>{busy === "unlock" && <Loader2 size={16} className="spin" />}{t.continue}</button></div></section></main>;
+  if (setup === null) return <main className="setup aurora-shell"><AuroraBackground /><div className="skeleton setup-card" /></main>;
+  if (!vault) return <main className="setup aurora-shell"><AuroraBackground /><section className="setup-card"><BrandMark /><h1>{setup ? t.unlock : t.setup}</h1><p className="muted">{t.secretHelp}</p><div className="form"><Field label="Router Secret"><input type="password" value={secret} onChange={(event) => setSecret(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void unlock(!setup)} /></Field>{error && <div className="error">{error}</div>}<button className="btn primary" onClick={() => void unlock(!setup)} disabled={busy === "unlock"}>{busy === "unlock" && <Loader2 size={16} className="spin" />}{t.continue}</button></div></section>{toast && <ToastView toast={toast} />}</main>;
 
-  return <div className="shell"><aside className="sidebar"><div className="brand"><span className="logo">S</span>SRouter</div><nav className="nav">{nav.map(([id, Icon, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}><Icon size={18} />{label}</button>)}</nav><div className="sidebar-foot"><span className="dot" /> API online <span className="mono">v1.0</span></div></aside><main className="main"><header className="top"><div><h1>{tab === "overview" ? t.control : nav.find((x) => x[0] === tab)?.[2]}</h1><div className="muted">{tab === "overview" ? t.sub : `SRouter · vault v${vault.version}`}</div></div><div className="actions"><button className="btn icon-btn" onClick={() => setLocale(locale === "id" ? "en" : "id")} title="Language"><Languages size={17} /></button><button className="btn icon-btn" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} title="Theme">{theme === "dark" ? "☀" : "☾"}</button>{tab === "providers" && <button className="btn primary" onClick={() => openProvider()}><Plus size={16} />{t.addProvider}</button>}{tab === "routes" && <button className="btn primary" onClick={() => openRoute()}><Plus size={16} />{t.addRoute}</button>}{tab === "models" && <button className="btn" onClick={() => refreshModels(undefined, true)}><RefreshCw size={16} />Refresh Now</button>}</div></header>
-    {tab === "overview" && <><section className="grid four"><Metric label={t.active} value={metrics.providers} /><Metric label={t.modelCount} value={metrics.models} /><Metric label={t.routeCount} value={metrics.routes} /><Metric label="Relay" value={metrics.relays} /></section><section className="dashboard-columns"><article className="card"><div className="section-head"><h2>{t.providers}</h2><button className="link" onClick={() => setTab("providers")}>Manage<ChevronRight size={15} /></button></div><ProviderList providers={vault.providers.slice(0, 5)} t={t} onEdit={openProvider} onDelete={removeProvider} onTest={testProvider} onOAuth={oauth} onSync={(id) => refreshModels(id, true)} busy={busy} /></article><article className="card"><div className="section-head"><h2>Favorites</h2><button className="link" onClick={() => setTab("models")}>Browse<ChevronRight size={15} /></button></div><ModelList items={catalog.filter((m) => m.favorite).slice(0, 6)} onFavorite={toggleFavorite} compact />{!catalog.some((m) => m.favorite) && <EmptyState title="No favorites" text="Star models to keep them at the top." />}</article></section></>}
-    {tab === "providers" && <section className="card"><div className="section-head"><h2>Provider Status</h2><button className="btn" onClick={() => refreshModels(undefined, true)} disabled={busy === "sync"}>{busy === "sync" ? <Loader2 size={15} className="spin" /> : <RefreshCw size={15} />}Sync all</button></div><ProviderList providers={vault.providers} t={t} onEdit={openProvider} onDelete={removeProvider} onTest={testProvider} onOAuth={oauth} onSync={(id) => refreshModels(id, true)} busy={busy} />{vault.providers.length === 0 && <EmptyState title={t.emptyProvider} text="Add an OpenAI-compatible provider, then detect models automatically." />}</section>}
-    {tab === "models" && <section className="card"><div className="catalog-toolbar"><div className="searchbox"><Search size={16} /><input placeholder="Search models..." value={modelQuery} onChange={(e) => setModelQuery(e.target.value)} /></div><select value={providerFilter} onChange={(e) => setProviderFilter(e.target.value)}><option value="all">All providers</option>{filteredProviders.map((p) => <option value={p.id} key={p.id}>{p.name}</option>)}</select></div>{busy === "catalog" ? <SkeletonRows /> : <ModelList items={catalog} onFavorite={toggleFavorite} />}{!catalog.length && busy !== "catalog" && <EmptyState title="No models found" text="Try another search or sync provider models." />}</section>}
-    {tab === "routes" && <section className="route-grid">{Object.entries(vault.routes).map(([alias, targets]) => <article className="card route-card clickable" key={alias} onClick={() => openRoute(alias)}><div className="section-head"><div><h2 className="mono">{alias}</h2><span className="muted">{targets.length} targets</span></div><button className="btn icon-btn danger" onClick={(e) => { e.stopPropagation(); deleteRoute(alias); }}><Trash2 size={15} /></button></div>{targets.map((x, i) => <div className="target" key={`${x.providerId}-${x.model}-${i}`}><span>{x.priority || i + 1}</span><div><strong>{providerName(x.providerId)}</strong><div className="mono muted">{x.model}</div><div className="muted small">retry {x.retry || 0} · timeout {x.timeoutMs || "provider"} ms</div></div></div>)}</article>)}{!Object.keys(vault.routes).length && <div className="card"><EmptyState title={t.emptyRoute} text="Create an alias that points to one or more provider targets." /></div>}</section>}
-    {tab === "logs" && <section className="card"><div className="section-head"><h2>{t.requests}</h2><div className="actions"><button className="btn icon-btn" onClick={loadLogs}><RefreshCw size={15} /></button><button className="btn danger" onClick={clearLogs}>{t.clear}</button></div></div><div className="table-wrap"><table><thead><tr><th>Time</th><th>Provider</th><th>Model</th><th>Status</th><th>Latency</th></tr></thead><tbody>{logs.map((x, i) => <tr key={i}><td className="mono">{new Date(x.at).toLocaleString()}</td><td>{x.provider}</td><td className="mono">{x.model}</td><td><span className={`status-code ${x.status >= 200 && x.status < 300 ? "ok" : "fail"}`}>{x.status || "ERR"}</span></td><td>{x.latency} ms</td></tr>)}</tbody></table></div>{!logs.length && <EmptyState title="No logs" text="Request metadata will appear here." />}</section>}
-    {tab === "relay" && <section className="route-grid">{vault.providers.flatMap((p) => (p.relays || []).map((x) => ({ p, x }))).map(({ p, x }) => <article className="card" key={x.id}><div className="section-head"><div><h2>{x.name}</h2><div className="muted">{p.name} · {x.region}</div></div><span className="status"><span className="dot" />Enabled</span></div><div className="mono relay-url">{x.url}</div><button className="btn full" onClick={async () => { const q = await fetch("/api/relay-health", { method: "POST", headers: { "content-type": "application/json", "x-router-secret": secret }, body: JSON.stringify({ url: x.url }) }), j = await q.json(); notify(j.ok ? `Relay OK · ${j.latency} ms` : j.error || `HTTP ${j.status}`, j.ok ? "success" : "error"); }}>{t.test}</button></article>)}{metrics.relays === 0 && <div className="card"><EmptyState title="No relays" text="Relays are added from the provider editor." /></div>}</section>}
-    {tab === "settings" && <section className="settings-grid"><article className="card"><h2>Logging</h2><p className="muted">Prompt dan respons tidak pernah disimpan.</p><label className="switch-row"><span>Metadata logs</span><input type="checkbox" checked={vault.logging} onChange={async (e) => persist({ ...vault, logging: e.target.checked })} /></label></article><article className="card"><h2>Deployment sync</h2><p className="muted">Semua deployment dengan Vault ID yang sama memakai konfigurasi ini.</p><button className="btn" onClick={checkSync}>{t.sync}</button>{sync && <pre className="sync-box">{JSON.stringify(sync, null, 2)}</pre>}</article><article className="card"><h2>API endpoint</h2><code className="endpoint">{typeof location !== "undefined" ? location.origin : ""}/v1</code><p className="muted">Gunakan Router Secret sebagai API key.</p></article></section>}
-    {providerModal && <div className="modal" onMouseDown={(e) => e.target === e.currentTarget && setProviderModal(false)}><div className="dialog wide"><div className="section-head"><h2>{draft.id ? t.edit : t.addProvider}</h2><button className="btn icon-btn" onClick={() => setProviderModal(false)}>×</button></div><div className="form"><div className="row"><Field label="Name"><input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></Field><Field label="API format"><select value={draft.format} onChange={(e) => setDraft({ ...draft, format: e.target.value })}><option value="openai">OpenAI-compatible</option><option value="anthropic">Anthropic native</option><option value="gemini">Gemini native</option></select></Field></div><Field label="Base URL"><input value={draft.baseUrl} onChange={(e) => setDraft({ ...draft, baseUrl: e.target.value })} placeholder="https://integrate.api.nvidia.com/v1" /></Field><label className="switch-row"><span>Provider aktif</span><input type="checkbox" checked={draft.enabled} onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })} /></label><Field label="API keys · satu per baris: Label:key"><textarea value={draft.keys} onChange={(e) => setDraft({ ...draft, keys: e.target.value })} rows={3} /></Field><div className="detect-row"><button className="btn" onClick={detectModels} disabled={busy === "detect" || draft.format !== "openai"}>{busy === "detect" ? <Loader2 size={15} className="spin" /> : <RefreshCw size={15} />}Detect Models</button><span className={detectStatus.includes("gagal") || detectStatus.includes("failed") ? "error" : "muted"}>{detectStatus || "OpenAI-compatible providers can populate models automatically."}</span></div><Field label="Models · fallback manual jika detect tidak didukung"><textarea value={draft.models} onChange={(e) => setDraft({ ...draft, models: e.target.value })} rows={4} placeholder="model-a,model-b" /></Field><Field label="Capabilities"><input value={draft.capabilities} onChange={(e) => setDraft({ ...draft, capabilities: e.target.value })} /></Field><details><summary>Advanced headers & relay</summary><div className="form inset"><Field label="Custom headers · Header:value"><textarea value={draft.headers} onChange={(e) => setDraft({ ...draft, headers: e.target.value })} rows={2} /></Field><Field label="Relays · Name|URL|Secret|Region"><textarea value={draft.relays} onChange={(e) => setDraft({ ...draft, relays: e.target.value })} rows={3} /></Field><Field label="Relay mode"><select value={draft.relayMode} onChange={(e) => setDraft({ ...draft, relayMode: e.target.value })}><option value="direct">Direct, lalu relay</option><option value="prefer">Relay, lalu direct</option><option value="only">Relay only</option></select></Field></div></details><details><summary>OAuth 2.0 resmi</summary><div className="form inset"><label className="switch-row"><span>Aktifkan OAuth</span><input type="checkbox" checked={draft.oauthEnabled} onChange={(e) => setDraft({ ...draft, oauthEnabled: e.target.checked })} /></label>{draft.oauthEnabled && <><div className="row"><Field label="Authorize URL"><input value={draft.authorizeUrl} onChange={(e) => setDraft({ ...draft, authorizeUrl: e.target.value })} /></Field><Field label="Token URL"><input value={draft.tokenUrl} onChange={(e) => setDraft({ ...draft, tokenUrl: e.target.value })} /></Field></div><div className="row"><Field label="Client ID"><input value={draft.clientId} onChange={(e) => setDraft({ ...draft, clientId: e.target.value })} /></Field><Field label="Client Secret"><input type="password" value={draft.clientSecret} onChange={(e) => setDraft({ ...draft, clientSecret: e.target.value })} /></Field></div><Field label="Scopes"><input value={draft.scopes} onChange={(e) => setDraft({ ...draft, scopes: e.target.value })} /></Field></>}</div></details>{error && <div className="error">{error}</div>}<div className="dialog-actions"><button className="btn" onClick={() => setProviderModal(false)}>{t.cancel}</button><button className="btn primary" onClick={saveProvider} disabled={busy === "save-provider"}>{busy === "save-provider" && <Loader2 size={15} className="spin" />}{t.save}</button></div></div></div></div>}
-    {routeModal && <div className="modal" onMouseDown={(e) => e.target === e.currentTarget && setRouteModal(false)}><div className="dialog route-dialog"><div className="section-head"><h2>{routeDraft.originalAlias ? "Edit route" : t.addRoute}</h2><button className="btn icon-btn" onClick={() => setRouteModal(false)}>×</button></div><div className="form"><Field label="Alias"><input value={routeDraft.alias} onChange={(e) => setRouteDraft({ ...routeDraft, alias: e.target.value })} placeholder="smart" /></Field><div className="route-targets">{routeDraft.targets.map((x: Target, i: number) => <div className="target-editor" key={i} draggable onDragStart={() => setDragIndex(i)} onDragOver={(e) => e.preventDefault()} onDrop={() => { if (dragIndex !== null) moveTarget(dragIndex, i); setDragIndex(null); }}><div className="drag-handle"><ChevronsUpDown size={16} /></div><Field label="Provider"><select value={x.providerId} onChange={(e) => patchTarget(i, { providerId: e.target.value })}><option value="">Provider</option>{vault.providers.map((p) => <option value={p.id} key={p.id}>{p.name}</option>)}</select></Field><Field label="Model"><select value={x.model} onChange={(e) => patchTarget(i, { model: e.target.value })}><option value="">Model</option>{vault.providers.find((p) => p.id === x.providerId)?.models.map((m) => <option value={m} key={m}>{m}</option>)}</select></Field><Field label="Priority"><input type="number" min={1} value={x.priority || i + 1} onChange={(e) => patchTarget(i, { priority: Number(e.target.value) })} /></Field><Field label="Retry"><input type="number" min={0} value={x.retry || 0} onChange={(e) => patchTarget(i, { retry: Number(e.target.value) })} /></Field><Field label="Timeout"><input type="number" min={1000} value={x.timeoutMs || ""} onChange={(e) => patchTarget(i, { timeoutMs: Number(e.target.value) })} /></Field><div className="target-actions"><button className="btn icon-btn" onClick={() => moveTarget(i, i - 1)}><ChevronDown className="rotate" size={15} /></button><button className="btn icon-btn" onClick={() => moveTarget(i, i + 1)}><ChevronDown size={15} /></button><button className="btn icon-btn danger" onClick={() => setRouteDraft({ ...routeDraft, targets: routeDraft.targets.filter((_: Target, idx: number) => idx !== i) })}><Trash2 size={15} /></button></div></div>)}</div><button className="btn" onClick={() => setRouteDraft({ ...routeDraft, targets: [...routeDraft.targets, { ...emptyTarget(), priority: routeDraft.targets.length + 1 }] })}><Plus size={15} />Target fallback</button>{error && <div className="error">{error}</div>}<div className="dialog-actions"><button className="btn" onClick={() => setRouteModal(false)}>{t.cancel}</button><button className="btn primary" onClick={saveRoute} disabled={busy === "save-route"}>{busy === "save-route" && <Loader2 size={15} className="spin" />}{t.save}</button></div></div></div></div>}
-    {toast && <div className={`toast ${toast.type}`}>{toast.text}</div>}</main></div>;
+  return <div className="shell aurora-shell"><AuroraBackground />
+    <aside className={`sidebar ${mobileNavOpen ? "open" : ""}`}>
+      <div className="brand"><BrandMark /><div><strong>SRouter</strong><span>Aurora Command</span></div></div>
+      <nav className="nav" aria-label="Primary navigation">{nav.map(({ id, Icon, label }) => <button key={id} className={tab === id ? "active" : ""} onClick={() => { setTab(id); setMobileNavOpen(false); }}><Icon size={18} />{label}</button>)}</nav>
+      <div className="sidebar-foot"><span className="pulse-dot" /> API online <span className="mono">v{vault.version}</span></div>
+    </aside>
+
+    <main className="main">
+      <header className="top">
+        <div className="title-stack">
+          <span className="eyebrow"><Sparkles size={14} /> AI infrastructure Monitor + Operate</span>
+          <h1>{tab === "overview" ? t.control : nav.find((item) => item.id === tab)?.label}</h1>
+          <div className="muted">{tab === "overview" ? t.sub : `SRouter vault v${vault.version} - ${formatDate(vault.updatedAt)}`}</div>
+        </div>
+        <div className="actions">
+          <button className="btn command-trigger" onClick={() => setCommandOpen(true)}><Command size={16} /><span>Command</span><kbd>{typeof navigator !== "undefined" && navigator.platform.includes("Mac") ? "Cmd" : "Ctrl"} K</kbd></button>
+          <button className="btn icon-btn" onClick={() => setLocale(locale === "id" ? "en" : "id")} title="Language" aria-label="Language"><Languages size={17} /></button>
+          <button className="btn icon-btn" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} title="Theme" aria-label="Theme">{theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}</button>
+          {tab === "providers" && <button className="btn primary" onClick={() => openProvider()}><Plus size={16} />{t.addProvider}</button>}
+          {tab === "routes" && <button className="btn primary" onClick={() => openRoute()}><Plus size={16} />{t.addRoute}</button>}
+          {tab === "models" && <button className="btn" onClick={() => void refreshModels(undefined, true)} disabled={busy === "sync"}>{busy === "sync" ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}Refresh Now</button>}
+        </div>
+      </header>
+
+      {tab === "overview" && <>
+        <section className="grid four"><Metric label={t.active} value={metrics.providers} icon={Server} /><Metric label={t.modelCount} value={metrics.models} icon={Boxes} /><Metric label={t.routeCount} value={metrics.routes} icon={RouteIcon} /><Metric label="Relays" value={metrics.relays} icon={Cloud} /></section>
+        <section className="dashboard-columns">
+          <article className="card panel-strong"><div className="section-head"><h2>Provider health network</h2><button className="link" onClick={() => setTab("providers")}>Manage<ArrowRight size={15} /></button></div><HealthNetwork providers={vault.providers} /></article>
+          <article className="card panel-strong"><div className="section-head"><h2>Favorites</h2><button className="link" onClick={() => setTab("models")}>Browse<ArrowRight size={15} /></button></div><ModelList items={catalog.filter((model) => model.favorite).slice(0, 6)} onFavorite={toggleFavorite} compact />{!catalog.some((model) => model.favorite) && <EmptyState title="No favorites" text="Star models to keep them at the top." />}</article>
+        </section>
+        <section className="dashboard-columns">
+          <article className="card"><div className="section-head"><h2>{t.providers}</h2><button className="link" onClick={() => setTab("providers")}>Open<ArrowRight size={15} /></button></div><ProviderList providers={vault.providers.slice(0, 5)} t={t} inspectedProviderId={inspectedProviderId} onInspect={setInspectedProviderId} onEdit={openProvider} onDelete={removeProvider} onTest={testProvider} onOAuth={oauth} onSync={(id) => void refreshModels(id, true)} busy={busy} /></article>
+          <article className="card"><div className="section-head"><h2>Route chains</h2><button className="link" onClick={() => setTab("routes")}>Operate<ArrowRight size={15} /></button></div>{Object.entries(vault.routes).slice(0, 2).map(([alias, targets]) => <RouteCard key={alias} alias={alias} targets={targets} providerName={providerName} onOpen={openRoute} onDelete={deleteRoute} compact />)}{!Object.keys(vault.routes).length && <EmptyState title={t.emptyRoute} text="Create an alias that points to one or more provider targets." />}</article>
+        </section>
+      </>}
+
+      {tab === "providers" && <section className="provider-console">
+        <article className="card provider-table"><div className="section-head"><h2>Provider Status</h2><button className="btn" onClick={() => void refreshModels(undefined, true)} disabled={busy === "sync"}>{busy === "sync" ? <Loader2 size={15} className="spin" /> : <RefreshCw size={15} />}Sync all</button></div><HealthNetwork providers={vault.providers} compact /><ProviderList providers={vault.providers} t={t} inspectedProviderId={inspectedProviderId} onInspect={setInspectedProviderId} onEdit={openProvider} onDelete={removeProvider} onTest={testProvider} onOAuth={oauth} onSync={(id) => void refreshModels(id, true)} busy={busy} />{vault.providers.length === 0 && <EmptyState title={t.emptyProvider} text="Add an OpenAI-compatible provider, then detect models automatically." />}</article>
+        <ProviderInspector provider={inspectedProvider} t={t} onEdit={openProvider} onTest={testProvider} onOAuth={oauth} onSync={(id) => void refreshModels(id, true)} busy={busy} />
+      </section>}
+
+      {tab === "models" && <section className="card"><div className="catalog-toolbar"><div className="searchbox"><Search size={16} /><input placeholder="Search models..." value={modelQuery} onChange={(event) => setModelQuery(event.target.value)} /></div><select value={providerFilter} onChange={(event) => setProviderFilter(event.target.value)}><option value="all">All providers</option>{filteredProviders.map((provider) => <option value={provider.id} key={provider.id}>{provider.name}</option>)}</select></div>{busy === "catalog" ? <SkeletonRows /> : <ModelList items={catalog} onFavorite={toggleFavorite} />}{!catalog.length && busy !== "catalog" && <EmptyState title="No models found" text="Try another search or sync provider models." />}</section>}
+
+      {tab === "routes" && <section className="route-grid">{Object.entries(vault.routes).map(([alias, targets]) => <RouteCard key={alias} alias={alias} targets={targets} providerName={providerName} onOpen={openRoute} onDelete={deleteRoute} />)}{!Object.keys(vault.routes).length && <div className="card"><EmptyState title={t.emptyRoute} text="Create an alias that points to one or more provider targets." /></div>}</section>}
+
+      {tab === "logs" && <section className="card"><div className="section-head"><h2>{t.requests}</h2><div className="actions"><button className="btn icon-btn" onClick={() => void loadLogs()} aria-label="Refresh logs"><RefreshCw size={15} /></button><button className="btn danger" onClick={() => void clearLogs()}>{t.clear}</button></div></div><div className="table-wrap"><table><thead><tr><th>Time</th><th>Provider</th><th>Model</th><th>Status</th><th>Latency</th></tr></thead><tbody>{logs.map((entry, index) => <tr key={`${entry.at}-${index}`}><td className="mono">{new Date(entry.at).toLocaleString()}</td><td>{entry.provider}</td><td className="mono">{entry.model}</td><td><span className={`status-code ${entry.status >= 200 && entry.status < 300 ? "ok" : "fail"}`}>{entry.status || "ERR"}</span></td><td>{entry.latency} ms</td></tr>)}</tbody></table></div>{!logs.length && <EmptyState title="No logs" text="Request metadata will appear here." />}</section>}
+
+      {tab === "relay" && <section className="route-grid">{relayItems.map(({ provider, relay }) => <article className="card relay-card" key={relay.id}><div className="section-head"><div><h2>{relay.name}</h2><div className="muted">{provider.name} - {relay.region}</div></div><span className="status"><span className="pulse-dot" />Enabled</span></div><div className="mono relay-url">{relay.url}</div><button className="btn full" onClick={() => void testRelay(relay.url)}>{t.test}</button></article>)}{metrics.relays === 0 && <div className="card"><EmptyState title="No relays" text="Relays are added from the provider editor." /></div>}</section>}
+
+      {tab === "settings" && <section className="settings-grid"><article className="card"><h2>Logging</h2><p className="muted">Prompt dan respons tidak pernah disimpan.</p><label className="switch-row"><span>Metadata logs</span><input type="checkbox" checked={vault.logging} onChange={(event) => void persist({ ...vault, logging: event.target.checked })} /></label></article><article className="card"><h2>Deployment sync</h2><p className="muted">Semua deployment dengan Vault ID yang sama memakai konfigurasi ini.</p><button className="btn" onClick={() => void checkSync()}>{t.sync}</button>{sync && <pre className="sync-box">{JSON.stringify(sync, null, 2)}</pre>}</article><article className="card"><h2>API endpoint</h2><code className="endpoint">{typeof window !== "undefined" ? window.location.origin : ""}/v1</code><p className="muted">Gunakan Router Secret sebagai API key.</p></article></section>}
+
+      {providerModal && <ProviderDialog draft={draft} setDraft={setDraft} error={error} detectStatus={detectStatus} busy={busy} t={t} onDetect={detectModels} onClose={() => setProviderModal(false)} onSave={saveProvider} />}
+      {routeModal && <RouteDialog routeDraft={routeDraft} setRouteDraft={setRouteDraft} providers={vault.providers} error={error} busy={busy} dragIndex={dragIndex} setDragIndex={setDragIndex} patchTarget={patchTarget} moveTarget={moveTarget} onClose={() => setRouteModal(false)} onSave={saveRoute} t={t} />}
+      {commandOpen && <CommandPalette query={commandQuery} setQuery={setCommandQuery} commands={visibleCommands} onClose={() => setCommandOpen(false)} />}
+      {toast && <ToastView toast={toast} />}
+    </main>
+
+    <nav className="mobile-nav" aria-label="Mobile navigation">
+      <button className="mobile-menu" onClick={() => setMobileNavOpen((open) => !open)} aria-label="Menu" aria-expanded={mobileNavOpen}><Menu size={18} /></button>
+      {nav.slice(0, 4).map(({ id, Icon, label }) => <button key={id} className={tab === id ? "active" : ""} onClick={() => { setTab(id); setMobileNavOpen(false); }}><Icon size={18} /><span>{label}</span></button>)}
+    </nav>
+  </div>;
 }
 
-function Metric({ label, value }: { label: string; value: number }) { return <div className="card metric-card"><div className="muted">{label}</div><div className="metric">{value}</div></div>; }
-function Field({ label, children }: { label: string; children: ReactNode }) { return <div className="field"><label>{label}</label>{children}</div>; }
-function EmptyState({ title, text }: { title: string; text: string }) { return <div className="empty"><ShieldCheck size={22} /><strong>{title}</strong><span>{text}</span></div>; }
-function SkeletonRows() { return <div className="skeleton-list">{Array.from({ length: 7 }).map((_, i) => <div className="skeleton-row" key={i} />)}</div>; }
+function BrandMark() {
+  return <span className="brand-mark" aria-label="SRouter routing network"><span className="brand-node source" /><span className="brand-path upper" /><span className="brand-path lower" /><span className="brand-node target upper" /><span className="brand-node target lower" /></span>;
+}
+
+function AuroraBackground() {
+  return <div className="aurora-bg" aria-hidden="true"><span /><span /><span /></div>;
+}
+
+function Metric({ label, value, icon: Icon }: { label: string; value: number; icon: LucideIcon }) {
+  return <div className="card metric-card"><div className="metric-icon"><Icon size={18} /></div><div className="muted">{label}</div><div className="metric">{value}</div></div>;
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return <div className="field aurora-field"><label>{label}</label>{children}</div>;
+}
+
+function EmptyState({ title, text }: { title: string; text: string }) {
+  return <div className="empty"><div className="empty-illustration"><ShieldCheck size={22} /><span /></div><strong>{title}</strong><span>{text}</span></div>;
+}
+
+function SkeletonRows() {
+  return <div className="skeleton-list">{Array.from({ length: 7 }).map((_, index) => <div className="skeleton-row skeleton" key={index} />)}</div>;
+}
+
+function ToastView({ toast }: { toast: Toast }) {
+  return <div className={`toast ${toast.type}`} role="status">{toast.text}</div>;
+}
+
 function ModelList({ items, onFavorite, compact = false }: { items: CatalogModel[]; onFavorite: (item: CatalogModel) => void; compact?: boolean }) {
-  return <div className={compact ? "model-list compact" : "model-list"}>{items.map((item) => <div className="model-row" key={item.id}><button className={`star ${item.favorite ? "on" : ""}`} onClick={() => onFavorite(item)} title="Favorite"><Star size={16} fill={item.favorite ? "currentColor" : "none"} /></button><div><strong>{item.displayName}</strong><div className="mono muted">{item.model}</div></div><span className="tag provider-badge">{item.providerName}</span></div>)}</div>;
+  return <div className={compact ? "model-list compact" : "model-list"}>{items.map((item) => <div className="model-row" key={item.id}><button className={`star ${item.favorite ? "on" : ""}`} onClick={() => onFavorite(item)} title="Favorite" aria-label="Favorite"><Star size={16} fill={item.favorite ? "currentColor" : "none"} /></button><div className="min-0"><strong>{item.displayName}</strong><div className="mono muted truncate">{item.model}</div></div><span className="tag provider-badge">{item.providerName}</span></div>)}</div>;
 }
-function ProviderList({ providers, t, onEdit, onDelete, onTest, onOAuth, onSync, busy }: { providers: Provider[]; t: any; onEdit: (p: Provider) => void; onDelete: (id: string) => void; onTest: (id: string) => void; onOAuth: (id: string, d?: boolean) => void; onSync: (id: string) => void; busy: Busy }) {
-  return <>{providers.map((p) => <div className="provider" key={p.id}><div><div className="provider-title"><strong>{p.name}</strong><span className="tag">{p.format}</span>{p.relays?.length ? <span className="tag relay-tag">Relay</span> : null}</div><div className="mono muted clamp">{p.baseUrl}</div>{p.modelSync?.error && <div className="error clamp">{p.modelSync.error}</div>}</div><div className="status-cell"><span className="status">{p.enabled ? <CheckCircle2 size={15} color="var(--good)" /> : <XCircle size={15} color="var(--muted)" />}{p.enabled ? t.healthy : t.disabled}</span><span className={`sync-pill ${p.modelSync?.status || "idle"}`}>{p.modelSync?.status || "idle"}</span></div><div><strong>{p.models.length}</strong><div className="muted small">models</div></div><div><div className="muted small">Last Sync</div><div className="mono">{p.modelSync?.lastSync ? new Date(p.modelSync.lastSync).toLocaleString() : "Never"}</div></div><div className="provider-actions"><button className="btn" onClick={() => onSync(p.id)} disabled={busy === "sync" || p.format !== "openai"}>{busy === "sync" ? <Loader2 size={15} className="spin" /> : <RefreshCw size={15} />}</button><button className="btn" onClick={() => onTest(p.id)}>{t.test}</button>{p.oauth && <button className="btn" onClick={() => onOAuth(p.id, Boolean(p.oauth?.accessToken))}>{p.oauth.accessToken ? t.disconnect : t.connect}</button>}<button className="btn icon-btn" onClick={() => onEdit(p)}><Edit3 size={15} /></button><button className="btn icon-btn danger" onClick={() => onDelete(p.id)}><Trash2 size={15} /></button></div></div>)}</>;
+
+function ProviderList({ providers, t, inspectedProviderId, onInspect, onEdit, onDelete, onTest, onOAuth, onSync, busy }: { providers: Provider[]; t: Copy; inspectedProviderId: string; onInspect: (id: string) => void; onEdit: (provider: Provider) => void; onDelete: (id: string) => void; onTest: (id: string) => void; onOAuth: (id: string, disconnect?: boolean) => void; onSync: (id: string) => void; busy: Busy }) {
+  return <div className="provider-list">{providers.map((provider) => <div className={`provider ${inspectedProviderId === provider.id ? "selected" : ""}`} key={provider.id}><div className="min-0"><div className="provider-title"><strong>{provider.name}</strong><span className="tag">{provider.format}</span>{provider.relays?.length ? <span className="tag relay-tag">Relay</span> : null}</div><div className="mono muted clamp">{provider.baseUrl}</div>{provider.modelSync?.error && <div className="error clamp">{provider.modelSync.error}</div>}</div><div className="status-cell"><span className="status">{provider.enabled ? <CheckCircle2 size={15} color="var(--good)" /> : <XCircle size={15} color="var(--muted)" />}{provider.enabled ? t.healthy : t.disabled}</span><span className={`sync-pill ${provider.modelSync?.status || "idle"}`}>{provider.modelSync?.status || "idle"}</span></div><div><strong>{provider.models.length}</strong><div className="muted small">models</div></div><div><div className="muted small">Last Sync</div><div className="mono">{provider.modelSync?.lastSync ? new Date(provider.modelSync.lastSync).toLocaleString() : "Never"}</div></div><div className="provider-actions"><button className="btn" onClick={() => onInspect(provider.id)} aria-expanded={inspectedProviderId === provider.id}><PanelRightOpen size={15} />Inspector</button><button className="btn" onClick={() => onSync(provider.id)} disabled={busy === "sync" || provider.format !== "openai"}>{busy === "sync" ? <Loader2 size={15} className="spin" /> : <RefreshCw size={15} />}</button><button className="btn" onClick={() => onTest(provider.id)}>{t.test}</button>{provider.oauth && <button className="btn" onClick={() => onOAuth(provider.id, Boolean(provider.oauth?.accessToken))}>{provider.oauth.accessToken ? t.disconnect : t.connect}</button>}<button className="btn icon-btn" onClick={() => onEdit(provider)} aria-label={t.edit}><Edit3 size={15} /></button><button className="btn icon-btn danger" onClick={() => onDelete(provider.id)} aria-label={t.remove}><Trash2 size={15} /></button></div></div>)}</div>;
+}
+
+function ProviderInspector({ provider, t, onEdit, onTest, onOAuth, onSync, busy }: { provider?: Provider; t: Copy; onEdit: (provider: Provider) => void; onTest: (id: string) => void; onOAuth: (id: string, disconnect?: boolean) => void; onSync: (id: string) => void; busy: Busy }) {
+  if (!provider) return <aside className="card provider-inspector"><h2>Inspector</h2><EmptyState title="No provider selected" text="Choose a provider to inspect routing health and credentials." /></aside>;
+  return <aside className="card provider-inspector"><div className="section-head"><div><span className="eyebrow"><PanelRightOpen size={14} /> Inspector</span><h2>{provider.name}</h2></div><span className={`sync-pill ${provider.modelSync?.status || "idle"}`}>{provider.modelSync?.status || "idle"}</span></div><div className="inspector-grid"><div><span>Format</span><strong>{provider.format}</strong></div><div><span>Keys</span><strong>{provider.keys.length}</strong></div><div><span>Models</span><strong>{provider.models.length}</strong></div><div><span>Timeout</span><strong>{provider.timeoutMs || 120000} ms</strong></div></div><div className="inspector-section"><span className="muted small">Base URL</span><code>{provider.baseUrl}</code></div><div className="chip-row">{provider.capabilities.map((capability) => <span className="tag" key={capability}>{capability}</span>)}</div><div className="inspector-section"><span className="muted small">Relays</span>{provider.relays?.length ? provider.relays.map((relay) => <div className="relay-mini" key={relay.id}><span className="pulse-dot" /><div><strong>{relay.name}</strong><div className="mono muted truncate">{relay.url}</div></div></div>) : <p className="muted">Direct routing only.</p>}</div><div className="inspector-actions"><button className="btn primary" onClick={() => onTest(provider.id)}>{t.test}</button><button className="btn" onClick={() => onSync(provider.id)} disabled={busy === "sync" || provider.format !== "openai"}><RefreshCw size={15} />{t.sync}</button>{provider.oauth && <button className="btn" onClick={() => onOAuth(provider.id, Boolean(provider.oauth?.accessToken))}>{provider.oauth.accessToken ? t.disconnect : t.connect}</button>}<button className="btn" onClick={() => onEdit(provider)}><Edit3 size={15} />{t.edit}</button></div></aside>;
+}
+
+function HealthNetwork({ providers, compact = false }: { providers: Provider[]; compact?: boolean }) {
+  if (!providers.length) return <EmptyState title="No health signals" text="Providers will appear as connected nodes after setup." />;
+  return <div className={`health-network ${compact ? "compact" : ""}`}>{providers.map((provider, index) => <div className="health-segment" key={provider.id}><div className={`health-node ${provider.enabled ? "online" : "offline"}`}><Server size={16} /><strong>{provider.name}</strong><span>{provider.models.length} models</span></div>{index < providers.length - 1 && <span className="health-connector" />}</div>)}</div>;
+}
+
+function RouteCard({ alias, targets, providerName, onOpen, onDelete, compact = false }: { alias: string; targets: Target[]; providerName: (id: string) => string; onOpen: (alias: string) => void; onDelete: (alias: string) => void; compact?: boolean }) {
+  return <article className={`card route-card clickable ${compact ? "compact" : ""}`} onClick={() => onOpen(alias)}><div className="section-head"><div className="min-0"><h2 className="mono truncate">{alias}</h2><span className="muted">{targets.length} targets</span></div><button className="btn icon-btn danger" onClick={(event) => { event.stopPropagation(); void onDelete(alias); }} aria-label="Delete route"><Trash2 size={15} /></button></div><div className="route-chain">{targets.map((target, index) => <div className="route-step" key={`${target.providerId}-${target.model}-${index}`}><div className="route-node"><span>{target.priority || index + 1}</span><div className="min-0"><strong>{providerName(target.providerId)}</strong><div className="mono muted truncate">{target.model}</div><div className="muted small">retry {target.retry || 0} - timeout {target.timeoutMs || "provider"} ms</div></div></div>{index < targets.length - 1 && <span className="route-connector" />}</div>)}</div></article>;
+}
+
+function CommandPalette({ query, setQuery, commands, onClose }: { query: string; setQuery: (value: string) => void; commands: { id: string; label: string; hint: string; Icon: LucideIcon; run: () => void }[]; onClose: () => void }) {
+  return <div className="modal command-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><section className="command-palette" role="dialog" aria-modal="true" aria-labelledby="command-title"><div className="command-search"><Command size={18} /><input autoFocus placeholder="Command palette" aria-label="Command palette" value={query} onChange={(event) => setQuery(event.target.value)} /><button className="btn icon-btn" onClick={onClose} aria-label="Close command palette"><X size={16} /></button></div><h2 id="command-title">Command palette</h2><div className="command-list">{commands.map(({ id, label, hint, Icon, run }) => <button key={id} onClick={() => { run(); onClose(); }}><Icon size={17} /><span><strong>{label}</strong><small>{hint}</small></span><Zap size={14} /></button>)}{commands.length === 0 && <EmptyState title="No command" text="Try providers, routes, logs, or sync." />}</div></section></div>;
+}
+
+function ProviderDialog({ draft, setDraft, error, detectStatus, busy, t, onDetect, onClose, onSave }: { draft: ProviderDraft; setDraft: (draft: ProviderDraft) => void; error: string; detectStatus: string; busy: Busy; t: Copy; onDetect: () => void; onClose: () => void; onSave: () => void }) {
+  return <div className="modal" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><section className="dialog wide" role="dialog" aria-modal="true" aria-labelledby="provider-dialog-title"><div className="section-head"><h2 id="provider-dialog-title">{draft.id ? t.edit : t.addProvider}</h2><button className="btn icon-btn" onClick={onClose} aria-label="Close"><X size={16} /></button></div><div className="form"><div className="row"><Field label="Name"><input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></Field><Field label="API format"><select value={draft.format} onChange={(event) => setDraft({ ...draft, format: event.target.value as Provider["format"] })}><option value="openai">OpenAI-compatible</option><option value="anthropic">Anthropic native</option><option value="gemini">Gemini native</option></select></Field></div><Field label="Base URL"><input value={draft.baseUrl} onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })} placeholder="https://integrate.api.nvidia.com/v1" /></Field><label className="switch-row"><span>Provider aktif</span><input type="checkbox" checked={draft.enabled} onChange={(event) => setDraft({ ...draft, enabled: event.target.checked })} /></label><Field label="API keys - satu per baris: Label:key"><textarea value={draft.keys} onChange={(event) => setDraft({ ...draft, keys: event.target.value })} rows={3} /></Field><div className="detect-row"><button className="btn" onClick={onDetect} disabled={busy === "detect" || draft.format !== "openai"}>{busy === "detect" ? <Loader2 size={15} className="spin" /> : <RefreshCw size={15} />}Detect Models</button><span className={detectStatus.includes("gagal") || detectStatus.includes("failed") ? "error" : "muted"}>{detectStatus || "OpenAI-compatible providers can populate models automatically."}</span></div><Field label="Models - fallback manual jika detect tidak didukung"><textarea value={draft.models} onChange={(event) => setDraft({ ...draft, models: event.target.value })} rows={4} placeholder="model-a,model-b" /></Field><Field label="Capabilities"><input value={draft.capabilities} onChange={(event) => setDraft({ ...draft, capabilities: event.target.value })} /></Field><details><summary>Advanced headers & relay</summary><div className="form inset"><Field label="Custom headers - Header:value"><textarea value={draft.headers} onChange={(event) => setDraft({ ...draft, headers: event.target.value })} rows={2} /></Field><Field label="Relays - Name|URL|Secret|Region"><textarea value={draft.relays} onChange={(event) => setDraft({ ...draft, relays: event.target.value })} rows={3} /></Field><Field label="Relay mode"><select value={draft.relayMode} onChange={(event) => setDraft({ ...draft, relayMode: event.target.value as NonNullable<Provider["relayMode"]> })}><option value="direct">Direct, lalu relay</option><option value="prefer">Relay, lalu direct</option><option value="only">Relay only</option></select></Field></div></details><details><summary>OAuth 2.0 resmi</summary><div className="form inset"><label className="switch-row"><span>Aktifkan OAuth</span><input type="checkbox" checked={draft.oauthEnabled} onChange={(event) => setDraft({ ...draft, oauthEnabled: event.target.checked })} /></label>{draft.oauthEnabled && <><div className="row"><Field label="Authorize URL"><input value={draft.authorizeUrl} onChange={(event) => setDraft({ ...draft, authorizeUrl: event.target.value })} /></Field><Field label="Token URL"><input value={draft.tokenUrl} onChange={(event) => setDraft({ ...draft, tokenUrl: event.target.value })} /></Field></div><div className="row"><Field label="Client ID"><input value={draft.clientId} onChange={(event) => setDraft({ ...draft, clientId: event.target.value })} /></Field><Field label="Client Secret"><input type="password" value={draft.clientSecret} onChange={(event) => setDraft({ ...draft, clientSecret: event.target.value })} /></Field></div><Field label="Scopes"><input value={draft.scopes} onChange={(event) => setDraft({ ...draft, scopes: event.target.value })} /></Field></>}</div></details>{error && <div className="error">{error}</div>}<div className="dialog-actions"><button className="btn" onClick={onClose}>{t.cancel}</button><button className="btn primary" onClick={onSave} disabled={busy === "save-provider"}>{busy === "save-provider" && <Loader2 size={15} className="spin" />}{t.save}</button></div></div></section></div>;
+}
+
+function RouteDialog({ routeDraft, setRouteDraft, providers, error, busy, dragIndex, setDragIndex, patchTarget, moveTarget, onClose, onSave, t }: { routeDraft: RouteDraft; setRouteDraft: (draft: RouteDraft) => void; providers: Provider[]; error: string; busy: Busy; dragIndex: number | null; setDragIndex: (index: number | null) => void; patchTarget: (index: number, patch: Partial<Target>) => void; moveTarget: (from: number, to: number) => void; onClose: () => void; onSave: () => void; t: Copy }) {
+  return <div className="modal" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><section className="dialog route-dialog" role="dialog" aria-modal="true" aria-labelledby="route-dialog-title"><div className="section-head"><h2 id="route-dialog-title">{routeDraft.originalAlias ? "Edit route" : t.addRoute}</h2><button className="btn icon-btn" onClick={onClose} aria-label="Close"><X size={16} /></button></div><div className="form"><Field label="Alias"><input value={routeDraft.alias} onChange={(event) => setRouteDraft({ ...routeDraft, alias: event.target.value })} placeholder="smart" /></Field><div className="route-targets">{routeDraft.targets.map((target, index) => <div className="target-editor" key={index} draggable onDragStart={() => setDragIndex(index)} onDragOver={(event) => event.preventDefault()} onDrop={() => { if (dragIndex !== null) moveTarget(dragIndex, index); setDragIndex(null); }}><div className="drag-handle"><ChevronsUpDown size={16} /></div><Field label="Provider"><select value={target.providerId} onChange={(event) => patchTarget(index, { providerId: event.target.value })}><option value="">Provider</option>{providers.map((provider) => <option value={provider.id} key={provider.id}>{provider.name}</option>)}</select></Field><Field label="Model"><select value={target.model} onChange={(event) => patchTarget(index, { model: event.target.value })}><option value="">Model</option>{providers.find((provider) => provider.id === target.providerId)?.models.map((model) => <option value={model} key={model}>{model}</option>)}</select></Field><Field label="Priority"><input type="number" min={1} value={target.priority || index + 1} onChange={(event) => patchTarget(index, { priority: Number(event.target.value) })} /></Field><Field label="Retry"><input type="number" min={0} value={target.retry || 0} onChange={(event) => patchTarget(index, { retry: Number(event.target.value) })} /></Field><Field label="Timeout"><input type="number" min={1000} value={target.timeoutMs || ""} onChange={(event) => patchTarget(index, { timeoutMs: Number(event.target.value) })} /></Field><div className="target-actions"><button className="btn icon-btn" onClick={() => moveTarget(index, index - 1)} aria-label="Move up"><ChevronDown className="rotate" size={15} /></button><button className="btn icon-btn" onClick={() => moveTarget(index, index + 1)} aria-label="Move down"><ChevronDown size={15} /></button><button className="btn icon-btn danger" onClick={() => setRouteDraft({ ...routeDraft, targets: routeDraft.targets.filter((_, targetIndex) => targetIndex !== index) })} aria-label="Remove target"><Trash2 size={15} /></button></div></div>)}</div><button className="btn" onClick={() => setRouteDraft({ ...routeDraft, targets: [...routeDraft.targets, { ...emptyTarget(), priority: routeDraft.targets.length + 1 }] })}><Plus size={15} />Target fallback</button>{error && <div className="error">{error}</div>}<div className="dialog-actions"><button className="btn" onClick={onClose}>{t.cancel}</button><button className="btn primary" onClick={onSave} disabled={busy === "save-route"}>{busy === "save-route" && <Loader2 size={15} className="spin" />}{t.save}</button></div></div></section></div>;
 }
