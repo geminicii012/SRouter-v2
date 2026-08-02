@@ -64,6 +64,14 @@ test("mobile metrics use a compact two-column layout", () => {
   assert.match(css, /@media\(max-width:420px\)[\s\S]*?\.main\{[^}]*padding-inline:10px/);
 });
 
+test("mobile rendering uses low-cost surfaces and skips offscreen dashboard work", () => {
+  assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.card\{[^}]*box-shadow:none/);
+  assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.btn:hover\{[^}]*transform:none/);
+  assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.health-connector::after\{[^}]*box-shadow:none/);
+  assert.match(css, /\.dashboard-columns,\.provider-console,\.route-grid,\.settings-grid\{[^}]*content-visibility:auto/);
+  assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.shell:after\{[^}]*mask-image:none/);
+});
+
 test("dialogs and API key textarea remain usable across mobile and desktop modes", () => {
   assert.match(css, /text-size-adjust:100%/);
   assert.match(css, /\.field textarea[^}]*font:13px/);
