@@ -362,10 +362,10 @@ export default function Home() {
   ], [t, vault, routeDraft]);
   const visibleCommands = commandActions.filter((action) => `${action.label} ${action.hint}`.toLowerCase().includes(commandQuery.toLowerCase()));
 
-  if (setup === null) return <main className="setup aurora-shell"><AuroraBackground /><div className="skeleton setup-card" /></main>;
-  if (!vault) return <main className="setup aurora-shell"><AuroraBackground /><section className="setup-card"><BrandMark /><h1>{setup ? t.unlock : t.setup}</h1><p className="muted">{t.secretHelp}</p><div className="form"><Field label="Router Secret"><input type="password" value={secret} onChange={(event) => setSecret(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void unlock(!setup)} /></Field>{error && <div className="error">{error}</div>}<button className="btn primary" onClick={() => void unlock(!setup)} disabled={busy === "unlock"}>{busy === "unlock" && <Loader2 size={16} className="spin" />}{t.continue}</button></div></section>{toast && <ToastView toast={toast} />}</main>;
+  if (setup === null) return <main className="setup aurora-shell"><div className="skeleton setup-card" /></main>;
+  if (!vault) return <main className="setup aurora-shell"><section className="setup-card"><BrandMark /><h1>{setup ? t.unlock : t.setup}</h1><p className="muted">{t.secretHelp}</p><div className="form"><Field label="Router Secret"><input type="password" value={secret} onChange={(event) => setSecret(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void unlock(!setup)} /></Field>{error && <div className="error">{error}</div>}<button className="btn primary" onClick={() => void unlock(!setup)} disabled={busy === "unlock"}>{busy === "unlock" && <Loader2 size={16} className="spin" />}{t.continue}</button></div></section>{toast && <ToastView toast={toast} />}</main>;
 
-  return <div className="shell aurora-shell"><AuroraBackground />
+  return <div className="shell aurora-shell">
     <button className={`nav-backdrop ${mobileNavOpen ? "show" : ""}`} onClick={() => setMobileNavOpen(false)} aria-label="Close navigation" tabIndex={mobileNavOpen ? 0 : -1} />
     <aside className={`sidebar ${mobileNavOpen ? "open" : ""}`}>
       <div className="brand"><BrandMark /><div><strong>SRouter</strong><span>Aurora Command</span></div></div>
@@ -435,9 +435,6 @@ function BrandMark() {
   return <span className="brand-mark" aria-label="SRouter routing network"><span className="brand-node source" /><span className="brand-path upper" /><span className="brand-path lower" /><span className="brand-node target upper" /><span className="brand-node target lower" /></span>;
 }
 
-function AuroraBackground() {
-  return <div className="aurora-bg" aria-hidden="true"><span /><span /><span /></div>;
-}
 
 function Metric({ label, value, icon: Icon }: { label: string; value: number; icon: LucideIcon }) {
   return <div className="card metric-card"><div className="metric-icon"><Icon size={18} /></div><div className="muted">{label}</div><div className="metric">{value}</div></div>;

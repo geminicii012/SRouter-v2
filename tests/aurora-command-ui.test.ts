@@ -31,7 +31,7 @@ test("design system includes scalable tokens and a non-glass Aurora background",
   assert.match(css, /--radius-md:/);
   assert.match(css, /--motion-fast:/);
   assert.match(css, /\.aurora-field/);
-  assert.match(css, /@keyframes aurora-drift/);
+  assert.doesNotMatch(css, /@keyframes aurora-drift/);
 });
 
 test("UI includes premium loading, empty, toast, focus, and reduced motion states", () => {
