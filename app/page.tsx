@@ -25,7 +25,6 @@ import {
   Server,
   Settings,
   ShieldCheck,
-  Sparkles,
   Star,
   Sun,
   Trash2,
@@ -377,7 +376,6 @@ export default function Home() {
     <main className="main">
       <header className="top">
         <div className="title-stack">
-          <span className="eyebrow"><Sparkles size={14} /> AI infrastructure Monitor + Operate</span>
           <h1>{tab === "overview" ? t.control : nav.find((item) => item.id === tab)?.label}</h1>
           <div className="muted">{tab === "overview" ? t.sub : `SRouter vault v${vault.version} - ${formatDate(vault.updatedAt)}`}</div>
         </div>
