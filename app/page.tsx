@@ -63,6 +63,7 @@ export default function Home() {
   const [locale, setLocale] = useState<Locale>("id");
   const [theme, setTheme] = useState("dark");
   const [tab, setTab] = useState<Tab>("overview");
+  const [tabTransitioning, setTabTransitioning] = useState(false);
   const [secret, setSecret] = useState("");
   const [setup, setSetup] = useState<boolean | null>(null);
   const [vault, setVault] = useState<Vault | null>(null);
@@ -85,6 +86,7 @@ export default function Home() {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [inspectedProviderId, setInspectedProviderId] = useState<string>("");
   const autoSyncing = useRef(false);
+  const tabTimer = useRef<number | null>(null);
   const t = text[locale];
 
   useEffect(() => {
@@ -125,6 +127,20 @@ export default function Home() {
   function lines(value: string) { return value.split("\n").map((line) => line.trim()).filter(Boolean); }
   function providerName(id: string) { return vault?.providers.find((provider) => provider.id === id)?.name || "Missing provider"; }
   function formatDate(value?: string) { return value ? new Date(value).toLocaleString() : "Never"; }
+  function navigateTo(nextTab: Tab, after?: () => void) {
+    if (nextTab === tab || tabTransitioning) return;
+    setMobileNavOpen(false);
+    setCommandOpen(false);
+    setTabTransitioning(true);
+    if (tabTimer.current) window.clearTimeout(tabTimer.current);
+    tabTimer.current = window.setTimeout(() => {
+      setTab(nextTab);
+      setTabTransitioning(false);
+      tabTimer.current = null;
+      after?.();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }, 240);
+  }
 
   async function unlock(create = false) {
     setBusy("unlock");
@@ -351,13 +367,13 @@ export default function Home() {
   const filteredProviders = vault?.providers || [];
   const relayItems = vault?.providers.flatMap((provider) => (provider.relays || []).map((relay) => ({ provider, relay }))) || [];
   const commandActions = useMemo(() => [
-    { id: "overview", label: "Open overview", hint: "Monitor control plane", Icon: Activity, run: () => setTab("overview") },
-    { id: "providers", label: "Navigate providers", hint: "Provider health and credentials", Icon: Boxes, run: () => setTab("providers") },
-    { id: "add-provider", label: t.addProvider, hint: "Create a provider", Icon: Plus, run: () => { setTab("providers"); openProvider(); } },
-    { id: "models", label: "Open model catalog", hint: "Search and favorite models", Icon: Search, run: () => setTab("models") },
-    { id: "routes", label: "Navigate routes", hint: "Fallback chains", Icon: RouteIcon, run: () => setTab("routes") },
-    { id: "add-route", label: t.addRoute, hint: "Create a route alias", Icon: Network, run: () => { setTab("routes"); openRoute(); } },
-    { id: "logs", label: "Open logs", hint: "Request metadata", Icon: ScrollText, run: () => setTab("logs") },
+    { id: "overview", label: "Open overview", hint: "Monitor control plane", Icon: Activity, run: () => navigateTo("overview") },
+    { id: "providers", label: "Navigate providers", hint: "Provider health and credentials", Icon: Boxes, run: () => navigateTo("providers") },
+    { id: "add-provider", label: t.addProvider, hint: "Create a provider", Icon: Plus, run: () => navigateTo("providers", () => openProvider()) },
+    { id: "models", label: "Open model catalog", hint: "Search and favorite models", Icon: Search, run: () => navigateTo("models") },
+    { id: "routes", label: "Navigate routes", hint: "Fallback chains", Icon: RouteIcon, run: () => navigateTo("routes") },
+    { id: "add-route", label: t.addRoute, hint: "Create a route alias", Icon: Network, run: () => navigateTo("routes", () => openRoute()) },
+    { id: "logs", label: "Open logs", hint: "Request metadata", Icon: ScrollText, run: () => navigateTo("logs") },
     { id: "sync", label: "Sync provider models", hint: "Refresh OpenAI-compatible catalogs", Icon: RefreshCw, run: () => void refreshModels(undefined, true) },
   ], [t, vault, routeDraft]);
   const visibleCommands = commandActions.filter((action) => `${action.label} ${action.hint}`.toLowerCase().includes(commandQuery.toLowerCase()));
@@ -369,11 +385,13 @@ export default function Home() {
     <button className={`nav-backdrop ${mobileNavOpen ? "show" : ""}`} onClick={() => setMobileNavOpen(false)} aria-label="Close navigation" tabIndex={mobileNavOpen ? 0 : -1} />
     <aside className={`sidebar ${mobileNavOpen ? "open" : ""}`}>
       <div className="brand"><BrandMark /><div><strong>SRouter</strong><span>Aurora Command</span></div></div>
-      <nav className="nav" aria-label="Primary navigation">{nav.map(({ id, Icon, label }) => <button key={id} className={tab === id ? "active" : ""} onClick={() => { setTab(id); setMobileNavOpen(false); }}><Icon size={18} />{label}</button>)}</nav>
+      <nav className="nav" aria-label="Primary navigation">{nav.map(({ id, Icon, label }) => <button key={id} className={tab === id ? "active" : ""} onClick={() => navigateTo(id)} disabled={tabTransitioning}><Icon size={18} />{label}</button>)}</nav>
       <div className="sidebar-foot"><span className="pulse-dot" /> API online <span className="mono">v{vault.version}</span></div>
     </aside>
 
     <main className="main">
+      {tabTransitioning && <div className="page-transition" role="status" aria-live="polite"><span /><strong>Switching view</strong><small>Preparing command surface</small></div>}
+      <div className={tabTransitioning ? "page-content leaving" : "page-content"}>
       <header className="top">
         <div className="title-stack">
           <h1>{tab === "overview" ? t.control : nav.find((item) => item.id === tab)?.label}</h1>
@@ -394,12 +412,12 @@ export default function Home() {
       {tab === "overview" && <>
         <section className="grid four"><Metric label={t.active} value={metrics.providers} icon={Server} /><Metric label={t.modelCount} value={metrics.models} icon={Boxes} /><Metric label={t.routeCount} value={metrics.routes} icon={RouteIcon} /><Metric label="Relays" value={metrics.relays} icon={Cloud} /></section>
         <section className="dashboard-columns">
-          <article className="card panel-strong"><div className="section-head"><h2>Provider health network</h2><button className="link" onClick={() => setTab("providers")}>Manage<ArrowRight size={15} /></button></div><HealthNetwork providers={vault.providers} /></article>
-          <article className="card panel-strong"><div className="section-head"><h2>Favorites</h2><button className="link" onClick={() => setTab("models")}>Browse<ArrowRight size={15} /></button></div><ModelList items={catalog.filter((model) => model.favorite).slice(0, 6)} onFavorite={toggleFavorite} compact />{!catalog.some((model) => model.favorite) && <EmptyState title="No favorites" text="Star models to keep them at the top." />}</article>
+          <article className="card panel-strong"><div className="section-head"><h2>Provider health network</h2><button className="link" onClick={() => navigateTo("providers")}>Manage<ArrowRight size={15} /></button></div><HealthNetwork providers={vault.providers} /></article>
+          <article className="card panel-strong"><div className="section-head"><h2>Favorites</h2><button className="link" onClick={() => navigateTo("models")}>Browse<ArrowRight size={15} /></button></div><ModelList items={catalog.filter((model) => model.favorite).slice(0, 6)} onFavorite={toggleFavorite} compact />{!catalog.some((model) => model.favorite) && <EmptyState title="No favorites" text="Star models to keep them at the top." />}</article>
         </section>
         <section className="dashboard-columns">
-          <article className="card"><div className="section-head"><h2>{t.providers}</h2><button className="link" onClick={() => setTab("providers")}>Open<ArrowRight size={15} /></button></div><ProviderList providers={vault.providers.slice(0, 5)} t={t} inspectedProviderId={inspectedProviderId} onInspect={setInspectedProviderId} onEdit={openProvider} onDelete={removeProvider} onTest={testProvider} onOAuth={oauth} onSync={(id) => void refreshModels(id, true)} busy={busy} /></article>
-          <article className="card"><div className="section-head"><h2>Route chains</h2><button className="link" onClick={() => setTab("routes")}>Operate<ArrowRight size={15} /></button></div>{Object.entries(vault.routes).slice(0, 2).map(([alias, targets]) => <RouteCard key={alias} alias={alias} targets={targets} providerName={providerName} onOpen={openRoute} onDelete={deleteRoute} compact />)}{!Object.keys(vault.routes).length && <EmptyState title={t.emptyRoute} text="Create an alias that points to one or more provider targets." />}</article>
+          <article className="card"><div className="section-head"><h2>{t.providers}</h2><button className="link" onClick={() => navigateTo("providers")}>Open<ArrowRight size={15} /></button></div><ProviderList providers={vault.providers.slice(0, 5)} t={t} inspectedProviderId={inspectedProviderId} onInspect={setInspectedProviderId} onEdit={openProvider} onDelete={removeProvider} onTest={testProvider} onOAuth={oauth} onSync={(id) => void refreshModels(id, true)} busy={busy} /></article>
+          <article className="card"><div className="section-head"><h2>Route chains</h2><button className="link" onClick={() => navigateTo("routes")}>Operate<ArrowRight size={15} /></button></div>{Object.entries(vault.routes).slice(0, 2).map(([alias, targets]) => <RouteCard key={alias} alias={alias} targets={targets} providerName={providerName} onOpen={openRoute} onDelete={deleteRoute} compact />)}{!Object.keys(vault.routes).length && <EmptyState title={t.emptyRoute} text="Create an alias that points to one or more provider targets." />}</article>
         </section>
       </>}
 
@@ -422,11 +440,12 @@ export default function Home() {
       {routeModal && <RouteDialog routeDraft={routeDraft} setRouteDraft={setRouteDraft} providers={vault.providers} error={error} busy={busy} dragIndex={dragIndex} setDragIndex={setDragIndex} patchTarget={patchTarget} moveTarget={moveTarget} onClose={() => setRouteModal(false)} onSave={saveRoute} t={t} />}
       {commandOpen && <CommandPalette query={commandQuery} setQuery={setCommandQuery} commands={visibleCommands} onClose={() => setCommandOpen(false)} />}
       {toast && <ToastView toast={toast} />}
+      </div>
     </main>
 
     <nav className="mobile-nav" aria-label="Mobile navigation">
       <button className="mobile-menu" onClick={() => setMobileNavOpen((open) => !open)} aria-label="Menu" aria-expanded={mobileNavOpen}><Menu size={18} /></button>
-      {nav.slice(0, 4).map(({ id, Icon, label }) => <button key={id} className={tab === id ? "active" : ""} onClick={() => { setTab(id); setMobileNavOpen(false); }}><Icon size={18} /><span>{label}</span></button>)}
+      {nav.slice(0, 4).map(({ id, Icon, label }) => <button key={id} className={tab === id ? "active" : ""} onClick={() => navigateTo(id)} disabled={tabTransitioning}><Icon size={18} /><span>{label}</span></button>)}
     </nav>
   </div>;
 }

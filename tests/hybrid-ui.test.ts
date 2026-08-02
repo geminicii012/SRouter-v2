@@ -81,6 +81,17 @@ test("mobile keeps smooth GPU-friendly operational animations", () => {
   assert.match(css, /\.toast\{[^}]*animation:toast-in/);
 });
 
+test("tab navigation shows a short animated transition before changing content", () => {
+  assert.match(page, /const \[tabTransitioning, setTabTransitioning\] = useState\(false\)/);
+  assert.match(page, /window\.setTimeout\(\(\) => \{[\s\S]*?setTab\(nextTab\)/);
+  assert.match(page, /className="page-transition"/);
+  assert.match(page, /aria-live="polite"/);
+  assert.match(css, /\.page-transition\{[^}]*animation:page-transition-in/);
+  assert.match(css, /@keyframes page-transition-in/);
+  assert.match(css, /@keyframes transition-pulse/);
+  assert.match(css, /@media\(prefers-reduced-motion:reduce\)/);
+});
+
 test("dialogs and API key textarea remain usable across mobile and desktop modes", () => {
   assert.match(css, /text-size-adjust:100%/);
   assert.match(css, /\.field textarea[^}]*font:13px/);
