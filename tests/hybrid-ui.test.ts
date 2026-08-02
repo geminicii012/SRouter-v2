@@ -86,8 +86,8 @@ test("tab navigation shows a short animated transition before changing content",
   assert.match(page, /window\.setTimeout\(\(\) => \{[\s\S]*?setTab\(nextTab\)/);
   assert.match(page, /className="page-transition"/);
   assert.match(page, /aria-live="polite"/);
-  assert.match(css, /\.page-transition\{[^}]*animation:page-transition-in/);
-  assert.match(css, /@keyframes page-transition-in/);
+  assert.match(css, /\.page-transition\{[^}]*left:50%[^}]*top:50%[^}]*width:min\(calc\(100vw - 24px\),240px\)[^}]*animation:page-transition-in/);
+  assert.match(css, /@keyframes page-transition-in\{from\{opacity:0;transform:translate\(-50%,calc\(-50% \+ 6px\)\)\}to\{opacity:1;transform:translate\(-50%,-50%\)\}\}/);
   assert.match(css, /@keyframes transition-pulse/);
   assert.match(css, /@media\(prefers-reduced-motion:reduce\)/);
 });
