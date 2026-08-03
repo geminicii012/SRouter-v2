@@ -92,6 +92,10 @@ test("tab navigation shows a short animated transition before changing content",
   assert.match(css, /@media\(prefers-reduced-motion:reduce\)/);
 });
 
+test("dialogs are not trapped by the animated transformed page wrapper", () => {
+  assert.match(css, /\.page-content:has\(\.modal\)\{[^}]*transform:none!important[^}]*animation:none!important/);
+});
+
 test("all mobile dialogs stay visible inside the dynamic viewport above bottom navigation", () => {
   assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.modal\{[^}]*align-items:flex-start[^}]*overflow-y:auto[^}]*padding:12px 8px calc\(88px \+ env\(safe-area-inset-bottom\)\)/);
   assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.dialog,\.command-palette\{[^}]*width:100%[^}]*max-height:calc\(100dvh - 112px - env\(safe-area-inset-bottom\)\)/);
