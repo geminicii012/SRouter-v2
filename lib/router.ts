@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import type { Provider, ProviderKey, RouteTarget, Vault } from "./types";
 import { addLog, isCooling, nextCounter, saveVault, setCooldown } from "./vault";
 import { assertSafeRemoteUrl, requestSignal } from "./security";
+import { calculateBillableCost, extractUsage, resolvePricing, textFrom, usageFromSsePayloads } from "./usage";
 
 const retryable = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
 const base = (value: string) => value.replace(/\/$/, "");
@@ -216,6 +217,44 @@ function syntheticSSE(json: any) {
   return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: ${JSON.stringify(end)}\n\ndata: [DONE]\n\n`, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
 }
 
+function usageLog(provider: Provider, model: string, status: number, latency: number, usage: ReturnType<typeof extractUsage>) {
+  return { at: new Date().toISOString(), provider: provider.name, model, status, latency, usage, cost: calculateBillableCost(usage, resolvePricing(provider.pricing, model)) };
+}
+async function safeAddLog(entry: unknown, limit: number) {
+  try { await addLog(entry, limit); } catch { /* Observability must never break inference. */ }
+}
+
+async function observedOpenAIResponse(response: Response, provider: Provider, model: string, body: any, started: number, vault: Vault) {
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("text/event-stream")) {
+    if (!response.body) return response;
+    const reader = response.body.getReader(), decoder = new TextDecoder();
+    let buffer = "", outputText = ""; const payloads: any[] = [];
+    const stream = new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        const { done, value } = await reader.read();
+        if (done) {
+          const usage = usageFromSsePayloads(payloads, { inputText: textFrom(body), outputText });
+          if (vault.logging) await safeAddLog(usageLog(provider, model, response.status, Date.now() - started, usage), vault.logLimit);
+          controller.close(); return;
+        }
+        const text = decoder.decode(value, { stream: true }); buffer += text;
+        const lines = buffer.split("\n"); buffer = lines.pop() || "";
+        for (const line of lines) if (line.startsWith("data:") && line.slice(5).trim() !== "[DONE]") try { const json = JSON.parse(line.slice(5).trim()); payloads.push(json); outputText += textFrom(json); } catch { /* Preserve malformed upstream data unchanged. */ }
+        controller.enqueue(value);
+      },
+      cancel(reason) { void reader.cancel(reason); },
+    });
+    return new Response(stream, { status: response.status, statusText: response.statusText, headers: response.headers });
+  }
+  const raw = await response.text();
+  let usage;
+  try { const json = JSON.parse(raw); usage = extractUsage(json, { inputText: textFrom(body), outputText: textFrom(json) }); }
+  catch { usage = extractUsage({}, { inputText: textFrom(body), outputText: raw }); }
+  if (vault.logging) await safeAddLog(usageLog(provider, model, response.status, Date.now() - started, usage), vault.logLimit);
+  return new Response(raw, { status: response.status, statusText: response.statusText, headers: response.headers });
+}
+
 export async function execute(vault: Vault, requested: string, path: string, body: any, signal?: AbortSignal, secret?: string) {
   if (!requested || typeof requested !== "string" || requested.length > 200) throw new Error("Model tidak valid");
   const direct = vault.providers.flatMap((provider) => provider.models.map((model) => ({ providerId: provider.id, model }))).filter((x) => x.model === requested);
@@ -235,29 +274,20 @@ export async function execute(vault: Vault, requested: string, path: string, bod
         response = await fetchVia(provider, `${base(provider.baseUrl)}/messages`, { method: "POST", headers: { "content-type": "application/json", "x-api-key": selected.token, "anthropic-version": "2023-06-01", ...provider.headers }, body: JSON.stringify(anthropicBody(body, target.model)), signal });
         if (response.ok) {
           const result = anthropicToOpenAI(await response.json(), target.model);
-          if (vault.logging) await addLog({ at: new Date().toISOString(), provider: provider.name, model: target.model, status: 200, latency: Date.now() - started }, vault.logLimit);
+          if (vault.logging) { const usage = extractUsage(result, { inputText: textFrom(body), outputText: textFrom(result) }); await safeAddLog(usageLog(provider, target.model, 200, Date.now() - started, usage), vault.logLimit); }
           return body.stream ? syntheticSSE(result) : jsonResponse(result);
         }
       } else if (provider.format === "gemini" && path === "/chat/completions") {
         response = await fetchVia(provider, `${base(provider.baseUrl)}/models/${encodeURIComponent(target.model)}:generateContent?key=${encodeURIComponent(selected.token)}`, { method: "POST", headers: { "content-type": "application/json", ...provider.headers }, body: JSON.stringify(geminiBody(body)), signal });
         if (response.ok) {
           const result = geminiToOpenAI(await response.json(), target.model);
-          if (vault.logging) await addLog({ at: new Date().toISOString(), provider: provider.name, model: target.model, status: 200, latency: Date.now() - started }, vault.logLimit);
+          if (vault.logging) { const usage = extractUsage(result, { inputText: textFrom(body), outputText: textFrom(result) }); await safeAddLog(usageLog(provider, target.model, 200, Date.now() - started, usage), vault.logLimit); }
           return body.stream ? syntheticSSE(result) : jsonResponse(result);
         }
       } else if (provider.format === "openai") {
         response = await openAIResponse(provider, selected.token, path, body, target.model, signal);
         if (response.ok) {
-          if (vault.logging) {
-            await addLog({
-              at: new Date().toISOString(),
-              provider: provider.name,
-              model: target.model,
-              status: response.status,
-              latency: Date.now() - started,
-            }, vault.logLimit);
-          }
-          return response;
+          return observedOpenAIResponse(response, provider, target.model, body, started, vault);
         }
       } else {
         throw new Error(`Format ${provider.format} tidak mendukung ${path}`);

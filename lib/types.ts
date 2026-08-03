@@ -21,6 +21,9 @@ export type ModelSync = {
   modelsCount?: number;
   nextSyncAt?: string;
 };
+export type PricingMode = "free" | "fixed" | "custom" | "unknown";
+export type ModelPricing = { mode: PricingMode; inputPerMillion?: number; outputPerMillion?: number };
+export type ProviderPricing = { default: ModelPricing; models?: Record<string, ModelPricing> };
 export type Provider = {
   id: string;
   name: string;
@@ -36,6 +39,7 @@ export type Provider = {
   timeoutMs?: number;
   oauth?: OAuthConfig;
   modelSync?: ModelSync;
+  pricing?: ProviderPricing;
 };
 export type RouteTarget = {
   providerId: string;
