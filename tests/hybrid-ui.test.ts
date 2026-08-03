@@ -7,6 +7,15 @@ const root = process.cwd();
 const page = readFileSync(join(root, "app/page.tsx"), "utf8");
 const css = readFileSync(join(root, "app/globals.css"), "utf8");
 
+test("compact visual scale keeps the dashboard calm and marketplace-like", () => {
+  assert.match(css, /--space-8:32px/);
+  assert.match(css, /\.main\{[^}]*padding:var\(--space-8\) clamp\(18px,3vw,44px\) 96px/);
+  assert.match(css, /\.top h1\{[^}]*font-size:clamp\(24px,3vw,38px\)/);
+  assert.match(css, /\.card\{[^}]*padding:var\(--space-4\)/);
+  assert.match(css, /\.metric\{font-size:28px/);
+  assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.main\{[^}]*padding:16px 8px/);
+});
+
 test("9Router hybrid shell keeps the complete operational navigation", () => {
   assert.match(page, /brand-mark/);
   assert.match(page, /nav-backdrop/);
