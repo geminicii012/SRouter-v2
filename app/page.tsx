@@ -151,7 +151,9 @@ export default function Home() {
     const observer = new IntersectionObserver((entries) => {
       for (const entry of entries) if (entry.isIntersecting) {
         const el = entry.target as HTMLElement;
-        el.style.transitionDelay = `${idx * 80}ms`;
+        const type = el.dataset.revealType || "up";
+        el.dataset.revealType = type;
+        el.style.transitionDelay = `${idx * 140}ms`;
         idx++;
         el.classList.add("revealed");
         observer.unobserve(el);
@@ -471,15 +473,15 @@ export default function Home() {
       </header>
 
       {tab === "overview" && <>
-        <section className="grid four" data-reveal><Metric label={t.active} value={metrics.providers} icon={Server} /><Metric label={t.modelCount} value={metrics.models} icon={Boxes} /><Metric label={t.routeCount} value={metrics.routes} icon={RouteIcon} /><Metric label="Relays" value={metrics.relays} icon={Cloud} /></section>
+        <section className="grid four" data-reveal><Metric label={t.active} data-reveal value={metrics.providers} icon={Server} /><Metric label={t.modelCount} data-reveal value={metrics.models} icon={Boxes} /><Metric label={t.routeCount} data-reveal value={metrics.routes} icon={RouteIcon} /><Metric label="Relays" data-reveal value={metrics.relays} icon={Cloud} /></section>
         <div data-reveal><UsageOverview summary={usageSummary} /></div>
-        <section className="dashboard-columns" data-reveal>
-          <article className="card panel-strong"><div className="section-head"><h2>Provider health network</h2><button className="link" onClick={() => navigateTo("providers")}>Manage<ArrowRight size={15} /></button></div><HealthNetwork providers={vault.providers} /></article>
-          <article className="card panel-strong"><div className="section-head"><h2>Favorites</h2><button className="link" onClick={() => navigateTo("models")}>Browse<ArrowRight size={15} /></button></div><ModelList items={catalog.filter((model) => model.favorite).slice(0, 6)} onFavorite={toggleFavorite} compact />{!catalog.some((model) => model.favorite) && <EmptyState title="No favorites" text="Star models to keep them at the top." />}</article>
+        <section className="dashboard-columns">
+          <article className="card panel-strong" data-reveal data-reveal-type="slide-left"><div className="section-head"><h2>Provider health network</h2><button className="link" onClick={() => navigateTo("providers")}>Manage<ArrowRight size={15} /></button></div><HealthNetwork providers={vault.providers} /></article>
+          <article className="card panel-strong" data-reveal data-reveal-type="slide-right"><div className="section-head"><h2>Favorites</h2><button className="link" onClick={() => navigateTo("models")}>Browse<ArrowRight size={15} /></button></div><ModelList items={catalog.filter((model) => model.favorite).slice(0, 6)} onFavorite={toggleFavorite} compact />{!catalog.some((model) => model.favorite) && <EmptyState title="No favorites" text="Star models to keep them at the top." />}</article>
         </section>
-        <section className="dashboard-columns" data-reveal>
-          <article className="card"><div className="section-head"><h2>{t.providers}</h2><button className="link" onClick={() => navigateTo("providers")}>Open<ArrowRight size={15} /></button></div><ProviderList providers={vault.providers.slice(0, 5)} t={t} inspectedProviderId={inspectedProviderId} onInspect={setInspectedProviderId} onEdit={openProvider} onDelete={removeProvider} onTest={testProvider} onOAuth={oauth} onSync={(id) => void refreshModels(id, true)} busy={busy} /></article>
-          <article className="card"><div className="section-head"><h2>Route chains</h2><button className="link" onClick={() => navigateTo("routes")}>Operate<ArrowRight size={15} /></button></div>{Object.entries(vault.routes).slice(0, 2).map(([alias, targets]) => <RouteCard key={alias} alias={alias} targets={targets} providerName={providerName} onOpen={openRoute} onDelete={deleteRoute} compact />)}{!Object.keys(vault.routes).length && <EmptyState title={t.emptyRoute} text="Create an alias that points to one or more provider targets." />}</article>
+        <section className="dashboard-columns">
+          <article className="card" data-reveal data-reveal-type="scale"><div className="section-head"><h2>{t.providers}</h2><button className="link" onClick={() => navigateTo("providers")}>Open<ArrowRight size={15} /></button></div><ProviderList providers={vault.providers.slice(0, 5)} t={t} inspectedProviderId={inspectedProviderId} onInspect={setInspectedProviderId} onEdit={openProvider} onDelete={removeProvider} onTest={testProvider} onOAuth={oauth} onSync={(id) => void refreshModels(id, true)} busy={busy} /></article>
+          <article className="card" data-reveal data-reveal-type="scale"><div className="section-head"><h2>Route chains</h2><button className="link" onClick={() => navigateTo("routes")}>Operate<ArrowRight size={15} /></button></div>{Object.entries(vault.routes).slice(0, 2).map(([alias, targets]) => <RouteCard key={alias} alias={alias} targets={targets} providerName={providerName} onOpen={openRoute} onDelete={deleteRoute} compact />)}{!Object.keys(vault.routes).length && <EmptyState title={t.emptyRoute} text="Create an alias that points to one or more provider targets." />}</article>
         </section>
       </>}
 
