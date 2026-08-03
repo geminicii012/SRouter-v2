@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { aggregateUsage, calculateBillableCost, estimateTextTokens, extractUsage, resolvePricing } from "../lib/usage";
-import { automaticPricing, inferCatalogProvider } from "../lib/pricing-catalog";
+import { automaticPricing, inferCatalogProvider, repriceAutoUsageLogs } from "../lib/pricing-catalog";
 
 test("free pricing records tokens but always bills zero", () => {
   const pricing = resolvePricing({ default: { mode: "free" } }, "meta/llama");
@@ -54,9 +54,29 @@ test("aggregation handles empty and unknown-cost logs", () => {
   assert.equal(unknown.month.unknownCostRequests, 1);
 });
 
-test("automatic pricing treats official NVIDIA NIM as free", () => {
+test("automatic pricing estimates official NVIDIA NIM market-equivalent cost", () => {
   assert.equal(inferCatalogProvider("https://integrate.api.nvidia.com/v1", "NVIDIA NIM", "openai"), "nvidia_nim");
-  assert.deepEqual(automaticPricing({}, { baseUrl: "https://integrate.api.nvidia.com/v1", name: "NVIDIA NIM", format: "openai" }, "meta/llama-3.1-70b-instruct"), { mode: "free", source: "provider-rule" });
+  assert.deepEqual(automaticPricing({}, { baseUrl: "https://integrate.api.nvidia.com/v1", name: "NVIDIA NIM", format: "openai" }, "meta/llama-3.1-70b-instruct"), { mode: "auto", inputPerMillion: 1, outputPerMillion: 3, source: "fallback-estimate" });
+});
+
+test("automatic pricing estimates every auto provider even when free or custom", () => {
+  const catalog = {
+    "openai/gpt-4o-mini": { litellm_provider: "openai", input_cost_per_token: 0.00000015, output_cost_per_token: 0.0000006 },
+    "claude-opus-4-6": { litellm_provider: "anthropic", input_cost_per_token: 0.000005, output_cost_per_token: 0.000025 },
+    "mimo-v2.5-pro": { litellm_provider: "openai", input_cost_per_token: 0.0000005, output_cost_per_token: 0.0000015 },
+  };
+  const cases = [
+    [{ baseUrl: "https://integrate.api.nvidia.com/v1", name: "nvidia", format: "openai" as const }, "openai/gpt-oss-120b"],
+    [{ baseUrl: "https://highkey.my.id/v1", name: "mimo", format: "openai" as const }, "mm/mimo-v2.5-pro"],
+    [{ baseUrl: "https://shenv2.my.id/v1", name: "re", format: "openai" as const }, "ccx/claude-opus-4-6"],
+    [{ baseUrl: "https://custom.invalid/v1", name: "custom", format: "openai" as const }, "vendor/never-seen-model"],
+  ] as const;
+  for (const [provider, model] of cases) {
+    const pricing = automaticPricing(catalog, provider, model);
+    assert.equal(pricing.mode, "auto");
+    assert.equal(Number(pricing.inputPerMillion) > 0, true);
+    assert.equal(Number(pricing.outputPerMillion) > 0, true);
+  }
 });
 
 test("automatic pricing resolves provider-specific catalog rates per million tokens", () => {
@@ -67,9 +87,16 @@ test("automatic pricing resolves provider-specific catalog rates per million tok
   assert.deepEqual(automaticPricing(catalog, { baseUrl: "https://api.openai.com/v1", name: "OpenAI", format: "openai" }, "gpt-4o-mini"), { mode: "auto", inputPerMillion: 0.15, outputPerMillion: 0.6, source: "litellm" });
 });
 
-test("automatic pricing returns unknown instead of matching another provider", () => {
+test("automatic pricing uses fallback instead of cross-provider matching", () => {
   const catalog = { "openai/shared-model": { litellm_provider: "openai", input_cost_per_token: 1e-6, output_cost_per_token: 2e-6 } };
-  assert.deepEqual(automaticPricing(catalog, { baseUrl: "https://api.anthropic.com", name: "Anthropic", format: "anthropic" }, "shared-model"), { mode: "unknown", source: "unmatched" });
+  assert.deepEqual(automaticPricing(catalog, { baseUrl: "https://api.anthropic.com", name: "Anthropic", format: "anthropic" }, "shared-model"), { mode: "auto", inputPerMillion: 1, outputPerMillion: 3, source: "fallback-estimate" });
+});
+
+test("usage API can reprice historical unknown auto logs", async () => {
+  const rows = [{ at: "2026-08-03T10:00:00.000Z", provider: "custom", model: "x/model", status: 200, latency: 1, usage: { inputTokens: 1000, outputTokens: 500, totalTokens: 1500, source: "provider" as const }, cost: { mode: "unknown" as const, usd: null } }];
+  const providers = [{ name: "custom", baseUrl: "https://custom.invalid/v1", format: "openai" as const, pricing: { default: { mode: "auto" as const } } }];
+  const repriced = await repriceAutoUsageLogs(rows, providers, async () => ({ mode: "auto", inputPerMillion: 1, outputPerMillion: 3, source: "fallback-estimate" }));
+  assert.deepEqual(repriced[0].cost, { mode: "auto", usd: 0.0025 });
 });
 
 test("automatic catalog loading is cached and does not repeatedly hit GitHub", async () => {

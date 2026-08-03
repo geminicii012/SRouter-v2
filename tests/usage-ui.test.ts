@@ -9,18 +9,20 @@ const css = readFileSync(join(root, "app/globals.css"), "utf8");
 const router = readFileSync(join(root, "lib/router.ts"), "utf8");
 const route = readFileSync(join(root, "app/api/usage/route.ts"), "utf8");
 
-test("dashboard exposes token and billable cost observability without prompt storage", () => {
+test("dashboard exposes token and estimated cost observability without prompt storage", () => {
   assert.match(page, /Token & cost observability/);
   assert.match(page, /Input tokens/);
   assert.match(page, /Output tokens/);
-  assert.match(page, /Billable cost/);
+  assert.match(page, /Estimated cost/);
+  assert.match(page, /Market-equivalent estimate/);
+  assert.match(page, /fallback \$1 input \/ \$3 output per 1M token/);
   assert.match(page, /Metadata only/);
   assert.doesNotMatch(route, /prompt|messages|responseBody/);
 });
 
 test("provider editor offers honest pricing modes including free and unknown", () => {
   for (const mode of ["auto", "free", "fixed", "custom", "unknown"]) assert.match(page, new RegExp(`value="${mode}"`));
-  assert.match(page, /NVIDIA NIM resmi otomatis dianggap Free/);
+  assert.match(page, /Auto selalu menghitung market-equivalent estimate/);
   assert.match(page, /Input \$ \/ 1M tokens/);
   assert.match(page, /Output \$ \/ 1M tokens/);
 });
