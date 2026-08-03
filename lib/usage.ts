@@ -1,4 +1,4 @@
-export type PricingMode = "free" | "fixed" | "custom" | "unknown";
+export type PricingMode = "auto" | "free" | "fixed" | "custom" | "unknown";
 export type ModelPricing = { mode: PricingMode; inputPerMillion?: number; outputPerMillion?: number };
 export type ProviderPricing = { default: ModelPricing; models?: Record<string, ModelPricing> };
 export type TokenUsage = { inputTokens: number; outputTokens: number; totalTokens: number; source: "provider" | "estimated" };

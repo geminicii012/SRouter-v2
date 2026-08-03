@@ -19,8 +19,8 @@ test("dashboard exposes token and billable cost observability without prompt sto
 });
 
 test("provider editor offers honest pricing modes including free and unknown", () => {
-  for (const mode of ["free", "fixed", "custom", "unknown"]) assert.match(page, new RegExp(`value="${mode}"`));
-  assert.match(page, /NVIDIA NIM atau provider gratis/);
+  for (const mode of ["auto", "free", "fixed", "custom", "unknown"]) assert.match(page, new RegExp(`value="${mode}"`));
+  assert.match(page, /NVIDIA NIM resmi otomatis dianggap Free/);
   assert.match(page, /Input \$ \/ 1M tokens/);
   assert.match(page, /Output \$ \/ 1M tokens/);
 });
