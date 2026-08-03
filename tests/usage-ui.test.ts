@@ -9,14 +9,12 @@ const css = readFileSync(join(root, "app/globals.css"), "utf8");
 const router = readFileSync(join(root, "lib/router.ts"), "utf8");
 const route = readFileSync(join(root, "app/api/usage/route.ts"), "utf8");
 
-test("dashboard exposes token and estimated cost observability without prompt storage", () => {
-  assert.match(page, /Token & cost observability/);
-  assert.match(page, /Input tokens/);
-  assert.match(page, /Output tokens/);
-  assert.match(page, /Estimated cost/);
-  assert.match(page, /Market-equivalent estimate/);
-  assert.match(page, /fallback \$1 input \/ \$3 output per 1M token/);
-  assert.match(page, /Metadata only/);
+test("dashboard exposes concise token and estimated cost observability without prompt storage", () => {
+  assert.match(page, />Usage</);
+  assert.match(page, />Masuk</);
+  assert.match(page, />Keluar</);
+  assert.match(page, />Estimasi</);
+  assert.match(page, /nilai pasar/);
   assert.doesNotMatch(route, /prompt|messages|responseBody/);
 });
 

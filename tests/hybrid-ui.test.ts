@@ -16,6 +16,21 @@ test("compact visual scale keeps the dashboard calm and marketplace-like", () =>
   assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.main\{[^}]*padding:16px 8px/);
 });
 
+test("mobile dashboard uses modern typography and concise icon-led usage cards", () => {
+  assert.match(page, /ArrowDownToLine/);
+  assert.match(page, /ArrowUpFromLine/);
+  assert.match(page, /CircleDollarSign/);
+  assert.match(page, />Usage</);
+  assert.match(page, />Masuk</);
+  assert.match(page, />Keluar</);
+  assert.match(page, />Estimasi</);
+  assert.match(page, /Provider, model, rute, relay — satu tempat\./);
+  assert.doesNotMatch(page, /Metadata only — prompt dan respons tidak disimpan\./);
+  assert.match(css, /--font-ui:/);
+  assert.match(css, /font-family:var\(--font-ui\)/);
+  assert.match(css, /\.usage-label\{[^}]*display:flex[^}]*align-items:center/);
+});
+
 test("9Router hybrid shell keeps the complete operational navigation", () => {
   assert.match(page, /brand-mark/);
   assert.match(page, /nav-backdrop/);
