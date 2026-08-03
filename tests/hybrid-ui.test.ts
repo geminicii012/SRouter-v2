@@ -92,6 +92,13 @@ test("tab navigation shows a short animated transition before changing content",
   assert.match(css, /@media\(prefers-reduced-motion:reduce\)/);
 });
 
+test("all mobile dialogs stay visible inside the dynamic viewport above bottom navigation", () => {
+  assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.modal\{[^}]*align-items:flex-start[^}]*overflow-y:auto[^}]*padding:12px 8px calc\(88px \+ env\(safe-area-inset-bottom\)\)/);
+  assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.dialog,\.command-palette\{[^}]*width:100%[^}]*max-height:calc\(100dvh - 112px - env\(safe-area-inset-bottom\)\)/);
+  assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.dialog\{[^}]*padding:14px/);
+  assert.match(css, /@media\(max-width:420px\)[\s\S]*?\.main\{[^}]*padding-inline:6px/);
+});
+
 test("dialogs and API key textarea remain usable across mobile and desktop modes", () => {
   assert.match(css, /text-size-adjust:100%/);
   assert.match(css, /\.field textarea[^}]*font:13px/);

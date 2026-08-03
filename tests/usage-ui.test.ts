@@ -27,7 +27,7 @@ test("provider editor offers honest pricing modes including free and unknown", (
 
 test("usage dashboard remains compact and responsive on mobile", () => {
   assert.match(css, /\.usage-grid\{[^}]*grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
-  assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.usage-grid\{grid-template-columns:1fr\}/);
+  assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.usage-grid\{grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
   assert.match(css, /\.usage-card\{[^}]*min-height:96px/);
 });
 
