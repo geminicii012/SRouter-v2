@@ -147,12 +147,16 @@ export default function Home() {
   useEffect(() => {
     if (!vault || typeof IntersectionObserver === "undefined") return;
     const items = Array.from(document.querySelectorAll<HTMLElement>("[data-reveal]"));
+    let idx = 0;
     const observer = new IntersectionObserver((entries) => {
       for (const entry of entries) if (entry.isIntersecting) {
-        entry.target.classList.add("revealed");
-        observer.unobserve(entry.target);
+        const el = entry.target as HTMLElement;
+        el.style.transitionDelay = `${idx * 80}ms`;
+        idx++;
+        el.classList.add("revealed");
+        observer.unobserve(el);
       }
-    }, { rootMargin: "0px 0px -8%", threshold: 0.08 });
+    }, { rootMargin: "0px 0px -6%", threshold: 0.06 });
     for (const item of items) { item.classList.add("reveal-item"); observer.observe(item); }
     return () => observer.disconnect();
   }, [vault, tab]);
@@ -190,7 +194,7 @@ export default function Home() {
     setLocale(payload.vault.locale || locale);
     setBootVault(payload.vault);
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const pause = reduced ? 70 : 300;
+    const pause = reduced ? 100 : 2000;
     for (let phase = 1; phase <= 3; phase++) {
       setBootPhase(phase);
       await new Promise((resolve) => window.setTimeout(resolve, pause));
