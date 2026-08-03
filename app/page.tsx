@@ -115,8 +115,20 @@ export default function Home() {
   useEffect(() => {
     if (!commandOpen && !providerModal && !routeModal) return;
     const previousOverflow = document.body.style.overflow;
+    const previousPosition = document.body.style.position;
+    const previousWidth = document.body.style.width;
+    const scrollY = window.scrollY;
     document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = previousOverflow; };
+    document.body.style.position = "fixed";
+    document.body.style.width = "100%";
+    document.body.style.top = `-${scrollY}px`;
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.position = previousPosition;
+      document.body.style.width = previousWidth;
+      document.body.style.top = "";
+      window.scrollTo(0, scrollY);
+    };
   }, [commandOpen, providerModal, routeModal]);
 
   useEffect(() => { if (vault && tab === "logs") void loadLogs(); }, [tab, vault]);
