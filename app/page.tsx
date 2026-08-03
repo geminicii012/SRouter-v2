@@ -75,6 +75,8 @@ export default function Home() {
   const [secret, setSecret] = useState("");
   const [setup, setSetup] = useState<boolean | null>(null);
   const [vault, setVault] = useState<Vault | null>(null);
+  const [bootVault, setBootVault] = useState<Vault | null>(null);
+  const [bootPhase, setBootPhase] = useState(0);
   const [error, setError] = useState("");
   const [toast, setToast] = useState<Toast | null>(null);
   const [providerModal, setProviderModal] = useState(false);
@@ -142,6 +144,19 @@ export default function Home() {
     else if (!inspectedProviderId || !vault.providers.some((provider) => provider.id === inspectedProviderId)) setInspectedProviderId(vault.providers[0].id);
   }, [vault, inspectedProviderId]);
 
+  useEffect(() => {
+    if (!vault || typeof IntersectionObserver === "undefined") return;
+    const items = Array.from(document.querySelectorAll<HTMLElement>("[data-reveal]"));
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) if (entry.isIntersecting) {
+        entry.target.classList.add("revealed");
+        observer.unobserve(entry.target);
+      }
+    }, { rootMargin: "0px 0px -8%", threshold: 0.08 });
+    for (const item of items) { item.classList.add("reveal-item"); observer.observe(item); }
+    return () => observer.disconnect();
+  }, [vault, tab]);
+
   function notify(message: string, type: Toast["type"] = "success") {
     setToast({ text: message, type });
     window.setTimeout(() => setToast(null), 2600);
@@ -171,9 +186,18 @@ export default function Home() {
     const payload = await response.json() as { vault?: Vault; error?: string };
     setBusy("");
     if (!response.ok || !payload.vault) return setError(payload.error || "Unlock failed");
-    setVault(payload.vault);
     setSetup(true);
     setLocale(payload.vault.locale || locale);
+    setBootVault(payload.vault);
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const pause = reduced ? 70 : 300;
+    for (let phase = 1; phase <= 3; phase++) {
+      setBootPhase(phase);
+      await new Promise((resolve) => window.setTimeout(resolve, pause));
+    }
+    setVault(payload.vault);
+    setBootVault(null);
+    setBootPhase(0);
   }
 
   async function persist(next: Vault) {
@@ -408,6 +432,10 @@ export default function Home() {
   const visibleCommands = commandActions.filter((action) => `${action.label} ${action.hint}`.toLowerCase().includes(commandQuery.toLowerCase()));
 
   if (setup === null) return <main className="setup aurora-shell"><div className="skeleton setup-card" /></main>;
+  if (bootVault) {
+    const bootSteps = ["Memverifikasi vault", "Menyiapkan rute", "Sistem siap"];
+    return <main className="setup aurora-shell boot-screen" role="status" aria-live="polite"><section className="boot-console"><BrandMark /><div className="boot-orbit"><span /><span /><span /></div><strong>SRouter</strong><p>{bootSteps[Math.max(0, bootPhase - 1)]}</p><div className="boot-track"><span style={{ transform: `scaleX(${bootPhase / 3})` }} /></div><div className="boot-steps">{bootSteps.map((step, index) => <span className={bootPhase > index ? "ready" : ""} key={step}><CheckCircle2 size={13} />{step}</span>)}</div><div className="boot-scan" /></section></main>;
+  }
   if (!vault) return <main className="setup aurora-shell"><section className="setup-card"><BrandMark /><h1>{setup ? t.unlock : t.setup}</h1><p className="muted">{t.secretHelp}</p><div className="form"><Field label="Router Secret"><input type="password" value={secret} onChange={(event) => setSecret(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void unlock(!setup)} /></Field>{error && <div className="error">{error}</div>}<button className="btn primary" onClick={() => void unlock(!setup)} disabled={busy === "unlock"}>{busy === "unlock" && <Loader2 size={16} className="spin" />}{t.continue}</button></div></section>{toast && <ToastView toast={toast} />}</main>;
 
   return <div className="shell aurora-shell">
@@ -421,7 +449,7 @@ export default function Home() {
     <main className="main">
       {tabTransitioning && <div className="page-transition" role="status" aria-live="polite"><span /><strong>Switching view</strong><small>Preparing command surface</small></div>}
       <div key={tab} className={tabTransitioning ? "page-content leaving" : "page-content entered"}>
-      <header className="top">
+      <header className="top" data-reveal>
         <div className="title-stack">
           <h1>{tab === "overview" ? t.control : nav.find((item) => item.id === tab)?.label}</h1>
           <div className="muted">{tab === "overview" ? t.sub : `SRouter vault v${vault.version} - ${formatDate(vault.updatedAt)}`}</div>
@@ -439,13 +467,13 @@ export default function Home() {
       </header>
 
       {tab === "overview" && <>
-        <section className="grid four"><Metric label={t.active} value={metrics.providers} icon={Server} /><Metric label={t.modelCount} value={metrics.models} icon={Boxes} /><Metric label={t.routeCount} value={metrics.routes} icon={RouteIcon} /><Metric label="Relays" value={metrics.relays} icon={Cloud} /></section>
-        <UsageOverview summary={usageSummary} />
-        <section className="dashboard-columns">
+        <section className="grid four" data-reveal><Metric label={t.active} value={metrics.providers} icon={Server} /><Metric label={t.modelCount} value={metrics.models} icon={Boxes} /><Metric label={t.routeCount} value={metrics.routes} icon={RouteIcon} /><Metric label="Relays" value={metrics.relays} icon={Cloud} /></section>
+        <div data-reveal><UsageOverview summary={usageSummary} /></div>
+        <section className="dashboard-columns" data-reveal>
           <article className="card panel-strong"><div className="section-head"><h2>Provider health network</h2><button className="link" onClick={() => navigateTo("providers")}>Manage<ArrowRight size={15} /></button></div><HealthNetwork providers={vault.providers} /></article>
           <article className="card panel-strong"><div className="section-head"><h2>Favorites</h2><button className="link" onClick={() => navigateTo("models")}>Browse<ArrowRight size={15} /></button></div><ModelList items={catalog.filter((model) => model.favorite).slice(0, 6)} onFavorite={toggleFavorite} compact />{!catalog.some((model) => model.favorite) && <EmptyState title="No favorites" text="Star models to keep them at the top." />}</article>
         </section>
-        <section className="dashboard-columns">
+        <section className="dashboard-columns" data-reveal>
           <article className="card"><div className="section-head"><h2>{t.providers}</h2><button className="link" onClick={() => navigateTo("providers")}>Open<ArrowRight size={15} /></button></div><ProviderList providers={vault.providers.slice(0, 5)} t={t} inspectedProviderId={inspectedProviderId} onInspect={setInspectedProviderId} onEdit={openProvider} onDelete={removeProvider} onTest={testProvider} onOAuth={oauth} onSync={(id) => void refreshModels(id, true)} busy={busy} /></article>
           <article className="card"><div className="section-head"><h2>Route chains</h2><button className="link" onClick={() => navigateTo("routes")}>Operate<ArrowRight size={15} /></button></div>{Object.entries(vault.routes).slice(0, 2).map(([alias, targets]) => <RouteCard key={alias} alias={alias} targets={targets} providerName={providerName} onOpen={openRoute} onDelete={deleteRoute} compact />)}{!Object.keys(vault.routes).length && <EmptyState title={t.emptyRoute} text="Create an alias that points to one or more provider targets." />}</article>
         </section>

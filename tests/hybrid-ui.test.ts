@@ -31,6 +31,28 @@ test("mobile dashboard uses modern typography and concise icon-led usage cards",
   assert.match(css, /\.usage-label\{[^}]*display:flex[^}]*align-items:center/);
 });
 
+test("unlock boots into the dashboard with a lightweight staged sequence", () => {
+  assert.match(page, /bootVault/);
+  assert.match(page, /bootPhase/);
+  assert.match(page, /boot-screen/);
+  assert.match(page, /Memverifikasi vault/);
+  assert.match(page, /Menyiapkan rute/);
+  assert.match(page, /Sistem siap/);
+  assert.match(css, /@keyframes boot-scan/);
+  assert.match(css, /\.boot-screen/);
+  assert.doesNotMatch(css, /backdrop-filter/);
+});
+
+test("scroll reveal observes sections once and stays compositor friendly", () => {
+  assert.match(page, /IntersectionObserver/);
+  assert.match(page, /data-reveal/);
+  assert.match(page, /observer\.unobserve/);
+  assert.match(css, /\.reveal-item/);
+  assert.match(css, /translate3d/);
+  assert.match(css, /@media\(prefers-reduced-motion:reduce\)/);
+  assert.doesNotMatch(css, /animation-timeline:scroll/);
+});
+
 test("9Router hybrid shell keeps the complete operational navigation", () => {
   assert.match(page, /brand-mark/);
   assert.match(page, /nav-backdrop/);
