@@ -4,3 +4,25 @@ node_modules
 .env.local
 *.log
 .DS_Store
+
+# cadangan lokal & berkas kerja
+.backup-term/
+*.bak
+*.bak-*
+*.bak.*
+tsconfig.tsbuildinfo
+.env.bak*
+*.log
+.DS_Store
+
+# Artefak build & dependensi
+node_modules/
+.next/
+out/
+coverage/
+
+# Kredensial
+.env
+.env.local
+.env.*.local
+!.env.example

@@ -57,6 +57,26 @@ export type CatalogModel = {
   favorite: boolean;
   source: "provider" | "route";
 };
+export type ApiKeyLimits = {
+  tokenLimit: number | null;      // null = unlimited
+  rpmLimit: number | null;
+  concurrentLimit: number | null;
+};
+export type ApiKey = {
+  id: string;
+  name: string;
+  secret: string;                 // key asli (di dalam vault terenkripsi)
+  keyHash: string;                // sha256 dari key asli (untuk validasi cepat)
+  keyMask: string;                // tampilan aman (prefix…suffix)
+  enabled: boolean;
+  models: string[];               // whitelist; [] = semua model provider aktif
+  limits: ApiKeyLimits;
+  tokensUsed: number;             // salinan tampilan (sumber asli di Redis)
+  requests: number;
+  expiresAt: string | null;       // ISO; null = selamanya
+  createdAt: string;
+  lastUsedAt: string | null;
+};
 export type Vault = {
   version: number;
   locale: "id" | "en";
@@ -66,6 +86,7 @@ export type Vault = {
   logLimit: number;
   updatedAt: string;
   modelFavorites?: string[];
+  apiKeys?: ApiKey[];
 };
 export const emptyVault = (): Vault => ({
   version: 1,

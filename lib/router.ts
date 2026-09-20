@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import type { Provider, ProviderKey, RouteTarget, Vault } from "./types";
-import { addLog, isCooling, nextCounter, saveVault, setCooldown } from "./vault";
+import { addLog, bumpUsage, isCooling, nextCounter, saveVault, setCooldown } from "./vault";
 import { assertSafeRemoteUrl, requestSignal } from "./security";
 import { calculateBillableCost, extractUsage, resolvePricing, textFrom, usageFromSsePayloads } from "./usage";
 import { resolveAutomaticPricing } from "./pricing-catalog";
@@ -141,6 +141,26 @@ function responseFromOpenAIError(error: unknown) {
 }
 
 async function openAIResponse(provider: Provider, token: string, path: string, body: any, model: string, signal?: AbortSignal) {
+  // ── STREAM: bypass SDK ────────────────────────────────────────────────────
+  // OpenAI SDK membaca seluruh respons sebelum `asResponse()` selesai, jadi
+  // stream SSE tiba sekaligus (terbukti: 123 chunk @ timestamp sama).
+  // Untuk stream, pakai fetch() langsung supaya byte mengalir real-time.
+  if (body?.stream === true) {
+    const url = `${base(provider.baseUrl)}${path.startsWith("/") ? path : "/" + path}`;
+    const upstream = await openAIFetch(provider)(url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+        accept: "text/event-stream",
+        ...(provider.headers || {}),
+      },
+      body: JSON.stringify({ ...body, model }),
+      signal,
+    });
+    return upstream;
+  }
+
   const client = new OpenAI({
     apiKey: token,
     baseURL: base(provider.baseUrl),
@@ -223,13 +243,36 @@ async function usageLog(provider: Provider, model: string, status: number, laten
   const pricing = configured.mode === "auto" ? await resolveAutomaticPricing(provider, model) : configured;
   return { at: new Date().toISOString(), provider: provider.name, model, status, latency, usage, cost: calculateBillableCost(usage, pricing), pricingSource: "source" in pricing ? pricing.source : "manual" };
 }
-async function safeAddLog(entry: unknown, limit: number) {
+async function safeAddLog(entry: any, limit: number) {
   try { await addLog(entry, limit); } catch { /* Observability must never break inference. */ }
+  // Counter akumulatif: HARUS jalan walau logging dimatikan, karena ini
+  // sumber angka "total pemakaian" yang tidak boleh turun saat log dipangkas.
+  try { await bumpUsage(usageIncrement(entry)); } catch { /* Counter tidak boleh memutus inference. */ }
+}
+
+/** Ubah entri log jadi penambahan counter agregat. */
+function usageIncrement(entry: any) {
+  const cost = entry?.cost;
+  const usage = entry?.usage;
+  return {
+    requests: 1,
+    inputTokens: usage?.inputTokens || 0,
+    outputTokens: usage?.outputTokens || 0,
+    totalTokens: usage?.totalTokens || 0,
+    billableUsd: typeof cost?.usd === "number" ? cost.usd : 0,
+    unknownCostRequests: cost?.usd === null ? 1 : 0,
+    estimatedUsageRequests: usage?.source === "estimated" ? 1 : 0,
+  };
 }
 
 async function observedOpenAIResponse(response: Response, provider: Provider, model: string, body: any, started: number, vault: Vault) {
   const contentType = response.headers.get("content-type") || "";
-  if (contentType.includes("text/event-stream")) {
+  // Worker Cline (dan beberapa upstream lain) mengirim body SSE tapi
+  // menandai content-type sebagai application/json. Kalau kita hanya percaya
+  // header, stream dibaca penuh lewat .text() dan client menerima semuanya
+  // sekaligus. Jadi: anggap stream kalau diminta stream ATAU header SSE.
+  const wantsStream = body?.stream === true;
+  if (wantsStream || contentType.includes("text/event-stream")) {
     if (!response.body) return response;
     const reader = response.body.getReader(), decoder = new TextDecoder();
     let buffer = "", outputText = ""; const payloads: any[] = [];
@@ -248,7 +291,13 @@ async function observedOpenAIResponse(response: Response, provider: Provider, mo
       },
       cancel(reason) { void reader.cancel(reason); },
     });
-    return new Response(stream, { status: response.status, statusText: response.statusText, headers: response.headers });
+    // Header ke client WAJIB text/event-stream supaya browser tidak buffer.
+    const outHeaders = new Headers(response.headers);
+    outHeaders.set("content-type", "text/event-stream; charset=utf-8");
+    outHeaders.set("cache-control", "no-cache, no-transform");
+    outHeaders.set("x-accel-buffering", "no");
+    outHeaders.delete("content-length");
+    return new Response(stream, { status: response.status, statusText: response.statusText, headers: outHeaders });
   }
   const raw = await response.text();
   let usage;
@@ -298,10 +347,14 @@ export async function execute(vault: Vault, requested: string, path: string, bod
       const errorText = await response.text();
       last = `${provider.name}: HTTP ${response.status} - ${errorText}`;
       if (response.status === 429 && selected.keyId) await setCooldown(selected.keyId, Number(response.headers.get("retry-after")) || 60);
-      if (vault.logging) await addLog({ at: new Date().toISOString(), provider: provider.name, model: target.model, status: response.status, error: last, latency: Date.now() - started }, vault.logLimit);
+      { const e = { at: new Date().toISOString(), provider: provider.name, model: target.model, status: response.status, error: last, latency: Date.now() - started };
+        if (vault.logging) await addLog(e, vault.logLimit);
+        try { await bumpUsage(usageIncrement(e)); } catch { /* Counter tidak boleh memutus inference. */ } }
     } catch (error) {
       last = `${provider.name}: ${error instanceof Error ? error.message : "error"}`;
-      if (vault.logging) await addLog({ at: new Date().toISOString(), provider: provider.name, model: target.model, status: 0, error: last, latency: Date.now() - started }, vault.logLimit);
+      { const e = { at: new Date().toISOString(), provider: provider.name, model: target.model, status: 0, error: last, latency: Date.now() - started };
+      if (vault.logging) await addLog(e, vault.logLimit);
+      try { await bumpUsage(usageIncrement(e)); } catch { /* Counter tidak boleh memutus inference. */ } }
     }
   }
   throw new Error(last);

@@ -5,6 +5,9 @@ import { join } from "node:path";
 
 const root = process.cwd();
 const page = readFileSync(join(root, "app/page.tsx"), "utf8");
+// Boot screen dipindah ke komponen sendiri -> assertion boot membaca
+// file komponennya, bukan page.tsx.
+const bootSrc = readFileSync(join(root, "components/BootTerminal.tsx"), "utf8");
 const css = readFileSync(join(root, "app/globals.css"), "utf8");
 
 test("compact visual scale keeps the dashboard calm and marketplace-like", () => {
@@ -20,11 +23,12 @@ test("mobile dashboard uses modern typography and concise icon-led usage cards",
   assert.match(page, /ArrowDownToLine/);
   assert.match(page, /ArrowUpFromLine/);
   assert.match(page, /CircleDollarSign/);
-  assert.match(page, />Usage</);
-  assert.match(page, />Masuk</);
-  assert.match(page, />Keluar</);
-  assert.match(page, />Estimasi</);
-  assert.match(page, /Provider, model, rute, relay — satu tempat\./);
+  assert.match(page, /t\.usage/);
+  assert.match(page, /t\.tokenIn/);
+  assert.match(page, /t\.tokenOut/);
+  assert.match(page, /t\.estimate/);
+  // Subtitle 'Provider, model, rute, relay — satu tempat.' dihapus atas permintaan user
+  assert.doesNotMatch(page, /satu tempat/);
   assert.doesNotMatch(page, /Metadata only — prompt dan respons tidak disimpan\./);
   assert.match(css, /--font-ui:/);
   assert.match(css, /font-family:var\(--font-ui\)/);
@@ -32,14 +36,17 @@ test("mobile dashboard uses modern typography and concise icon-led usage cards",
 });
 
 test("unlock boots into the dashboard with a lightweight staged sequence", () => {
+  // Boot screen sekarang berupa terminal: komponen BootTerminal, bukan markup
+  // .boot-screen inline. Assertion menyesuaikan, tapi sifat yang diuji sama —
+  // urutan boot bertahap (vault -> rute -> siap) yang ringan.
   assert.match(page, /bootVault/);
   assert.match(page, /bootPhase/);
-  assert.match(page, /boot-screen/);
-  assert.match(page, /Memverifikasi vault/);
-  assert.match(page, /Menyiapkan rute/);
-  assert.match(page, /Sistem siap/);
-  assert.match(css, /@keyframes boot-scan/);
-  assert.match(css, /\.boot-screen/);
+  assert.match(page, /BootTerminal/);
+  assert.match(bootSrc, /VERIFYING VAULT/);
+  assert.match(bootSrc, /PREPARING ROUTES/);
+  assert.match(bootSrc, /SYSTEM READY/);
+  assert.match(css, /@keyframes lg-blink|@keyframes lg-drift/);
+  assert.match(css, /\.lg-shell/);
   assert.doesNotMatch(css, /backdrop-filter/);
 });
 
@@ -54,7 +61,7 @@ test("scroll reveal observes sections once and stays compositor friendly", () =>
 });
 
 test("9Router hybrid shell keeps the complete operational navigation", () => {
-  assert.match(page, /brand-mark/);
+  assert.doesNotMatch(page, /brand-mark/);   // logo dihapus
   assert.match(page, /nav-backdrop/);
   assert.match(page, /mobile-menu/);
   assert.match(page, /ProviderInspector/);
@@ -64,15 +71,15 @@ test("9Router hybrid shell keeps the complete operational navigation", () => {
 });
 
 test("9Router hybrid uses warm coral tokens and restrained grid treatment", () => {
-  assert.match(css, /--accent:#e56a4a/i);
-  assert.match(css, /--bg:#fdfaf6/i);
+  assert.match(css, /--accent:#ffb000/i);
+  assert.match(css, /--bg:#050505/i);
   assert.match(css, /--bg:#1a1a1a/i);
   assert.match(css, /\.shell:after\{[^}]*background-image:linear-gradient\(to right,color-mix\(in srgb,var\(--accent\)/);
   assert.match(css, /\.shell:after\{[^}]*background-size:32px 32px/);
   assert.match(css, /\.shell:after\{[^}]*z-index:-1[^}]*mask-image:radial-gradient/);
   assert.doesNotMatch(page, /AuroraBackground/);
   assert.doesNotMatch(css, /\.aurora-bg|@keyframes aurora-drift/);
-  assert.match(css, /brand-mark/);
+  assert.doesNotMatch(css, /brand-mark/);   // logo dihapus atas permintaan user
 });
 
 test("responsive shell covers tablet phone and narrow phone without losing topology scrolling", () => {
@@ -84,7 +91,7 @@ test("responsive shell covers tablet phone and narrow phone without losing topol
   assert.match(css, /\.health-network::-webkit-scrollbar\{[^}]*display:none/);
   assert.match(css, /\.health-segment\{[^}]*flex:0 0 auto/);
   assert.match(css, /\.health-node\{[^}]*flex:0 0 auto/);
-  assert.match(css, /\.health-connector\{[^}]*flex:0 0 54px/);
+  assert.match(css, /\.health-connector\{[^}]*flex:0 0 64px/);
   assert.match(css, /\.health-connector::after\{[^}]*animation:health-flow/);
   assert.match(css, /@keyframes health-flow/);
   assert.doesNotMatch(css, /\.health-segment\{[^}]*min-width:0/);
@@ -115,12 +122,16 @@ test("mobile rendering uses low-cost surfaces and skips offscreen dashboard work
   assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.btn:hover\{[^}]*transform:none/);
   assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.health-connector::after\{[^}]*box-shadow:none/);
   assert.match(css, /\.dashboard-columns,\.provider-console,\.route-grid,\.settings-grid\{[^}]*content-visibility:auto/);
-  assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.shell:after\{[^}]*mask-image:none/);
+  // Grid sekarang digambar di body::after supaya tidak terkunci stacking
+  // context .app-shell{isolation:isolate}. Di mobile mask TIDAK dimatikan
+  // lagi karena gradasi halus justru dibutuhkan.
+  assert.match(css, /\.health-connector::after\{box-shadow:none\}/);
+  assert.doesNotMatch(css, /\.shell:after\{mask-image:none/);
 });
 
 test("mobile keeps smooth GPU-friendly operational animations", () => {
   assert.match(css, /\.health-connector::after\{[^}]*animation:health-flow[^}]*will-change:transform/);
-  assert.match(css, /@keyframes health-flow\{from\{transform:translate3d\(0,0,0\)\}to\{transform:translate3d\(48px,0,0\)\}\}/);
+  assert.match(css, /@keyframes health-flow\{from\{transform:translate3d\(0,0,0\)\}to\{transform:translate3d\(50px,0,0\)\}\}/);
   assert.match(css, /\.sidebar\{[^}]*transition:transform var\(--motion-med\)/);
   assert.match(css, /\.spin\{[^}]*animation:spin/);
   assert.match(css, /\.skeleton\{[^}]*animation:shine/);

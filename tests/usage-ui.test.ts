@@ -10,17 +10,18 @@ const router = readFileSync(join(root, "lib/router.ts"), "utf8");
 const route = readFileSync(join(root, "app/api/usage/route.ts"), "utf8");
 
 test("dashboard exposes concise token and estimated cost observability without prompt storage", () => {
-  assert.match(page, />Usage</);
-  assert.match(page, />Masuk</);
-  assert.match(page, />Keluar</);
-  assert.match(page, />Estimasi</);
-  assert.match(page, /nilai pasar/);
+  assert.match(page, /t\.usage/);
+  assert.match(page, /t\.tokenIn/);
+  assert.match(page, /t\.tokenOut/);
+  assert.match(page, /t\.estimate/);
+  // 'nilai pasar' dihapus atas permintaan user
+  assert.doesNotMatch(page, /nilai pasar/);
   assert.doesNotMatch(route, /prompt|messages|responseBody/);
 });
 
 test("provider editor offers honest pricing modes including free and unknown", () => {
   for (const mode of ["auto", "free", "fixed", "custom", "unknown"]) assert.match(page, new RegExp(`value="${mode}"`));
-  assert.match(page, /Auto selalu menghitung market-equivalent estimate/);
+  assert.match(page, /fPricingNote/);
   assert.match(page, /Input \$ \/ 1M tokens/);
   assert.match(page, /Output \$ \/ 1M tokens/);
 });

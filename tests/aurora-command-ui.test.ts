@@ -30,7 +30,7 @@ test("design system includes scalable tokens and a non-glass Aurora background",
   assert.match(css, /--space-1:/);
   assert.match(css, /--radius-md:/);
   assert.match(css, /--motion-fast:/);
-  assert.match(css, /\.aurora-field/);
+  assert.match(css, /\.form-field/);   // di-rename dari .aurora-field
   assert.doesNotMatch(css, /@keyframes aurora-drift/);
 });
 
@@ -51,10 +51,11 @@ test("responsive shell supports desktop tablet and phone navigation", () => {
 });
 
 test("production visual identity uses restrained engineering colors and a routing brand mark", () => {
-  assert.match(page, /brand-mark/);
-  assert.match(page, /brand-node/);
-  assert.match(css, /--accent:#e56a4a/);
-  assert.match(css, /--accent2:#4f8cff/);
-  assert.match(css, /\.brand-mark/);
+  // Logo BrandMark dihapus atas permintaan user -> assert ketiadaannya.
+  assert.doesNotMatch(page, /brand-mark/);
+  assert.doesNotMatch(page, /BrandMark/);
+  assert.match(css, /--accent:#ffb000/);
+  assert.match(css, /--accent2:#4f8cff/);  // biru tetap dipertahankan
+  assert.doesNotMatch(css, /\.brand-mark/);
   assert.doesNotMatch(css, /linear-gradient\(135deg,var\(--accent\),var\(--accent3\)\)/);
 });
