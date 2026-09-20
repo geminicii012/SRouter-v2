@@ -26,3 +26,7 @@ coverage/
 .env.local
 .env.*.local
 !.env.example
+
+# skrip alat lokal (migrasi/verifikasi)
+migrate*.py
+verify_migrate.py
