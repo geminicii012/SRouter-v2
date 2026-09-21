@@ -212,6 +212,11 @@ Auto-deploy aktif: setiap `git push` ke `main` memicu build ulang.
 
 ## Fitur
 
+Seluruh fitur di bawah ini dibangun bertahap di repo ini — dari inti router,
+Chat Playground, API Key, katalog model, sampai tema/aksen dan grid background.
+Bagian **Riwayat perubahan** mencatat perbaikan yang paling berkesan agar
+alasannya tidak hilang saat kode dibaca ulang.
+
 ### Tab / menu
 
 Sembilan tab, label Bahasa Indonesia (kecuali `Models` / `Log` / `Relay` / `Chat`
@@ -310,7 +315,7 @@ Katalog diambil dari LiteLLM (`model_prices_and_context_window.json`), cache
 - **Simpan provider tidak menggantung** — `AbortController` 30 detik, pesan
   timeout jelas
 
-## Riwayat perbaikan penting
+## Riwayat perubahan
 
 ### Storage & agregasi
 
