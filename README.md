@@ -144,6 +144,26 @@ This runs strict TypeScript checking, automated tests, and the Next.js productio
 - Detect or manually enter models for each provider.
 - Create a route alias such as `smart`, then verify `/v1/models` and `/v1/chat/completions`.
 
+
+## Storage
+
+SRouter memakai **Cloudflare Durable Objects** sebagai penyimpanan utama
+(vault, API key, counter token, log), dengan Upstash Redis sebagai cadangan.
+
+| Variabel | Kegunaan |
+|---|---|
+| `SROUTER_STORE_URL` | endpoint Worker DO |
+| `SROUTER_STORE_TOKEN` | token Bearer Worker |
+| `UPSTASH_REDIS_REST_URL` | cadangan (opsional) |
+
+Pemilihan backend otomatis di `lib/redis.ts`: kalau `SROUTER_STORE_URL` diisi,
+pakai DO; kalau tidak, jatuh ke Upstash.
+
+## Deploy
+
+1. **Cloudflare Worker** — `cd worker-do && npx wrangler deploy`
+2. **Vercel** — hubungkan repo ini, set env di atas
+
 ## License
 
 MIT
