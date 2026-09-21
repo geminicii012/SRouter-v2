@@ -30,3 +30,6 @@ coverage/
 # skrip alat lokal (migrasi/verifikasi)
 migrate*.py
 verify_migrate.py
+sync_version.py
+rekey.py
+rekey*.py
