@@ -33,3 +33,7 @@ verify_migrate.py
 sync_version.py
 rekey.py
 rekey*.py
+probe_upstream.py
+query_wb.py
+get_prov_keys.py
+test_wb_all.py

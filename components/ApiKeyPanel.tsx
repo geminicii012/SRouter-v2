@@ -101,7 +101,7 @@ function expired(iso: string | null): boolean {
   return Date.now() > Date.parse(iso);
 }
 
-export default function ApiKeyPanel({ vault, secret, locale = "id" }: { vault: VaultLike; secret: string; locale?: Locale }) {
+export default function ApiKeyPanel({ vault, secret, locale = "id", onVaultChange }: { vault: VaultLike; secret: string; locale?: Locale; onVaultChange?: () => void }) {
   const t = L[locale];
   // model dari provider yang AKTIF saja
   const activeModels = useMemo(
@@ -126,6 +126,10 @@ export default function ApiKeyPanel({ vault, secret, locale = "id" }: { vault: V
   const H = { "content-type": "application/json", "x-router-secret": secret };
 
   async function load() {
+    // Setiap kali panel selesai memuat, beri tahu parent: versi vault di server
+    // kemungkinan sudah berubah (POST/PUT/DELETE di endpoint ini menaikkannya).
+    // Tanpa ini, parent masih memegang versi lama dan simpan berikutnya kena 409.
+    onVaultChange?.();
     setLoading(true);
     try {
       const r = await fetch("/api/apikeys", { headers: H });

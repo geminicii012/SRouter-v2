@@ -231,6 +231,11 @@ export default function Home() {
   });
   const [tab, setTab] = useState<Tab>("overview");
   const [tabTransitioning, setTabTransitioning] = useState(false);
+  // Versi vault terbaru — disimpan di ref supaya persist() TIDAK PERNAH pakai
+  // nilai basi dari closure state (setVault() itu async, jadi state bisa
+  // tertinggal satu langkah dan memicu VERSION_CONFLICT palsu).
+  const versionRef = useRef<number | null>(null);
+
   const [secret, setSecret] = useState(() => {
     try { return typeof window !== "undefined" ? (sessionStorage.getItem("srouter-secret") || "") : ""; }
     catch { return ""; }
@@ -281,6 +286,9 @@ export default function Home() {
     } catch { /* abaikan */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Jaga versionRef selalu mengikuti vault terbaru dari mana pun asalnya.
+  useEffect(() => { if (vault) versionRef.current = vault.version; }, [vault]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -411,13 +419,25 @@ export default function Home() {
     setBootVault(payload.vault);
   }
 
-  async function persist(next: Vault) {
+  /**
+   * Tulis vault dengan AUTO-RETRY saat VERSION_CONFLICT.
+   *
+   * Masalah lama: `expectedVersion` diambil dari state React yang bisa basi
+   * (setVault() async). Begitu ada tab/layar lain yang menulis lebih dulu,
+   * setiap simpan berikutnya ditolak 409 dan user terpaksa RELOAD.
+   *
+   * Sekarang: kalau 409, ambil vault terbaru dari server, terapkan ULANG
+   * hanya field yang kita ubah (patch), lalu kirim lagi. Maks 3 percobaan.
+   * Perubahan user TIDAK hilang, dan tab lain tidak tertimpa.
+   */
+  async function persist(next: Vault, patch?: Partial<Vault>, attempt = 0): Promise<boolean> {
     // Timeout keras: spinner TIDAK boleh muter selamanya kalau /api/vault menggantung.
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 30000);
+    const expected = versionRef.current ?? vault?.version;
     let response: Response;
     try {
-      response = await fetch("/api/vault", { method: "PUT", headers: { "content-type": "application/json", "x-router-secret": secret }, body: JSON.stringify({ vault: next, expectedVersion: vault?.version }), signal: ctl.signal });
+      response = await fetch("/api/vault", { method: "PUT", headers: { "content-type": "application/json", "x-router-secret": secret }, body: JSON.stringify({ vault: next, expectedVersion: expected }), signal: ctl.signal });
     } catch (e) {
       clearTimeout(timer);
       const msg = (e as Error).name === "AbortError"
@@ -429,6 +449,18 @@ export default function Home() {
     clearTimeout(timer);
     const payload = await response.json() as { vault?: Vault; error?: string };
     if (!response.ok || !payload.vault) {
+      // VERSION_CONFLICT: tab/layar lain menulis duluan. Ambil versi terbaru,
+      // tempelkan perubahan kita di atasnya, lalu coba lagi (maks 3x).
+      if (payload.error === "VERSION_CONFLICT" && attempt < 3) {
+        const fresh = await refetchVault();
+        if (fresh) {
+          // Saat konflik: pakai vault segar sebagai dasar, tempelkan perubahan
+          // kita di atasnya. `apiKeys` otomatis ikut karena spread `fresh` —
+          // tidak perlu disebut eksplisit (tipe Vault lokal tidak memuatnya).
+          const merged: Vault = { ...fresh, ...(patch ?? {}), version: fresh.version };
+          return persist(merged, patch, attempt + 1);
+        }
+      }
       const msg = payload.error === "VERSION_CONFLICT"
         ? (locale === "en" ? "Vault changed elsewhere. Reload and retry." : "Vault berubah di tempat lain. Muat ulang lalu coba lagi.")
         : (payload.error || "Save failed");
@@ -437,7 +469,20 @@ export default function Home() {
       return false;
     }
     setVault(payload.vault);
+    versionRef.current = payload.vault.version;
     return true;
+  }
+
+  /** Ambil vault terbaru dari server dan sinkronkan state + version ref. */
+  async function refetchVault(): Promise<Vault | null> {
+    try {
+      const r = await fetch("/api/vault", { headers: { "x-router-secret": secret }, cache: "no-store" });
+      if (!r.ok) return null;
+      const j = await r.json() as { vault?: Vault };
+      if (!j.vault) return null;
+      versionRef.current = j.vault.version;
+      return j.vault;
+    } catch { return null; }
   }
 
   async function loadCatalog(background = false) {
@@ -558,7 +603,7 @@ export default function Home() {
     const provider = providerFromDraft();
     const providers = draft.id ? vault.providers.map((item) => item.id === draft.id ? provider : item) : [...vault.providers, provider];
     try {
-      if (await persist({ ...vault, providers })) {
+      if (await persist({ ...vault, providers }, { providers })) {
         setProviderModal(false);
         setInspectedProviderId(provider.id);
         notify(locale === "id" ? "Provider disimpan" : "Provider saved");
@@ -628,7 +673,7 @@ export default function Home() {
       ? `Hapus provider "${label}" dan rute terkait?`
       : `Delete provider "${label}" and related routes?`)) return;
     const routes = Object.fromEntries(Object.entries(vault.routes).map(([alias, targets]) => [alias, targets.filter((target) => target.providerId !== id)]).filter(([, targets]) => targets.length));
-    await persist({ ...vault, providers: vault.providers.filter((provider) => provider.id !== id), routes });
+    await persist({ ...vault, providers: vault.providers.filter((provider) => provider.id !== id), routes }, { providers: vault.providers.filter((provider) => provider.id !== id), routes });
   }
 
   async function testProvider(id: string) {
@@ -675,7 +720,7 @@ export default function Home() {
     const routes = { ...vault.routes };
     if (routeDraft.originalAlias && routeDraft.originalAlias !== routeDraft.alias) delete routes[routeDraft.originalAlias];
     routes[routeDraft.alias] = targets;
-    if (await persist({ ...vault, routes })) {
+    if (await persist({ ...vault, routes }, { routes })) {
       setRouteModal(false);
       notify("Route saved");
     }
@@ -686,7 +731,7 @@ export default function Home() {
     if (!vault) return;
     const routes = { ...vault.routes };
     delete routes[alias];
-    await persist({ ...vault, routes });
+    await persist({ ...vault, routes }, { routes });
   }
 
   async function toggleFavorite(item: CatalogModel) {
@@ -829,13 +874,13 @@ export default function Home() {
 
       {tab === "routes" && <section className="route-grid">{Object.entries(vault.routes).map(([alias, targets]) => <RouteCard key={alias} alias={alias} targets={targets} providerName={providerName} onOpen={openRoute} onDelete={deleteRoute} t={t} />)}{!Object.keys(vault.routes).length && <div className="card"><EmptyState title={t.emptyRoute} text={t.noRoutesHint} /></div>}</section>}
 
-      {tab === "apikey" && <ApiKeyPanel vault={vault} secret={secret} locale={locale} />}
+      {tab === "apikey" && <ApiKeyPanel vault={vault} secret={secret} locale={locale} onVaultChange={() => { void refetchVault().then((fresh) => { if (fresh) setVault(fresh); }); }} />}
       {tab === "chat" && <ChatPanel vault={vault} secret={secret} locale={locale} />}
       {tab === "logs" && <section className="card"><div className="section-head"><h2>{t.requests}</h2><div className="actions"><button className="btn icon-btn" onClick={() => void loadLogs()} aria-label={t.refreshLogs}><RefreshCw size={15} /></button><button className="btn danger" onClick={() => void clearLogs()}>{t.clear}</button></div></div><div className="table-wrap"><table><thead><tr><th>{t.colTime}</th><th>{t.colProvider}</th><th>{t.colModel}</th><th>{t.colStatus}</th><th>{t.colInput}</th><th>{t.colOutput}</th><th>{t.colCost}</th><th>{t.colLatency}</th></tr></thead><tbody>{logs.map((entry, index) => <tr key={`${entry.at}-${index}`}><td className="mono">{new Date(entry.at).toLocaleString()}</td><td>{entry.provider}</td><td className="mono">{entry.model}</td><td><span className={`status-code ${entry.status >= 200 && entry.status < 300 ? "ok" : "fail"}`}>{entry.status || "ERR"}</span></td><td>{entry.usage ? formatTokens(entry.usage.inputTokens) : "—"}</td><td>{entry.usage ? formatTokens(entry.usage.outputTokens) : "—"}</td><td className="mono">{entry.cost?.usd === null ? "N/A" : entry.cost ? `$${entry.cost.usd.toFixed(6)}` : "—"}</td><td>{entry.latency} ms</td></tr>)}</tbody></table></div>{!logs.length && <EmptyState title={t.noLogs} text={t.noLogsHint} />}</section>}
 
       {tab === "relay" && <section className="route-grid">{relayItems.map(({ provider, relay }) => <article className="card relay-card" key={relay.id}><div className="section-head"><div><h2>{relay.name}</h2><div className="muted">{provider.name} - {relay.region}</div></div><span className="status"><span className="pulse-dot" />{t.healthy}</span></div><div className="mono relay-url">{relay.url}</div><button className="btn full" onClick={() => void testRelay(relay.url)}>{t.test}</button></article>)}{metrics.relays === 0 && <div className="card"><EmptyState title={t.noRelays} text={t.noRelaysHint} /></div>}</section>}
 
-      {tab === "settings" && <section className="settings-grid"><article className="card"><h2>{t.logging}</h2><p className="muted">{t.loggingHint}</p><label className="switch-row"><span>{t.metadataLogs}</span><input type="checkbox" checked={vault.logging} onChange={(event) => void persist({ ...vault, logging: event.target.checked })} /></label></article><article className="card"><h2>{t.deploySync}</h2><p className="muted">{t.deployHint}</p><button className="btn" onClick={() => void checkSync()}>{t.sync}</button>{sync && <pre className="sync-box">{JSON.stringify(sync, null, 2)}</pre>}</article><article className="card"><h2>{t.accent}</h2><p className="muted">{t.accentHint}</p><div className="accent-row">{ACCENTS.map((option) => <button key={option} type="button" className="accent-option" aria-pressed={accent === option} onClick={() => setAccent(option)}><span className={`accent-swatch ${option}`} aria-hidden="true" />{option === "blue" ? t.accentBlue : t.accentOrange}</button>)}</div></article><article className="card"><h2>{t.apiEndpoint}</h2><code className="endpoint">{typeof window !== "undefined" ? window.location.origin : ""}/v1</code><p className="muted">{t.apiHint}</p></article></section>}
+      {tab === "settings" && <section className="settings-grid"><article className="card"><h2>{t.logging}</h2><p className="muted">{t.loggingHint}</p><label className="switch-row"><span>{t.metadataLogs}</span><input type="checkbox" checked={vault.logging} onChange={(event) => void persist({ ...vault, logging: event.target.checked }, { logging: event.target.checked })} /></label></article><article className="card"><h2>{t.deploySync}</h2><p className="muted">{t.deployHint}</p><button className="btn" onClick={() => void checkSync()}>{t.sync}</button>{sync && <pre className="sync-box">{JSON.stringify(sync, null, 2)}</pre>}</article><article className="card"><h2>{t.accent}</h2><p className="muted">{t.accentHint}</p><div className="accent-row">{ACCENTS.map((option) => <button key={option} type="button" className="accent-option" aria-pressed={accent === option} onClick={() => setAccent(option)}><span className={`accent-swatch ${option}`} aria-hidden="true" />{option === "blue" ? t.accentBlue : t.accentOrange}</button>)}</div></article><article className="card"><h2>{t.apiEndpoint}</h2><code className="endpoint">{typeof window !== "undefined" ? window.location.origin : ""}/v1</code><p className="muted">{t.apiHint}</p></article></section>}
 
       {providerModal && <ProviderDialog draft={draft} setDraft={setDraft} error={error} detectStatus={detectStatus} detectError={detectError} busy={busy} t={t} locale={locale} onDetect={detectModels} onClose={() => setProviderModal(false)} onSave={saveProvider} />}
       {routeModal && <RouteDialog routeDraft={routeDraft} setRouteDraft={setRouteDraft} providers={vault.providers} error={error} busy={busy} dragIndex={dragIndex} setDragIndex={setDragIndex} patchTarget={patchTarget} moveTarget={moveTarget} onClose={() => setRouteModal(false)} onSave={saveRoute} t={t} locale={locale} />}
