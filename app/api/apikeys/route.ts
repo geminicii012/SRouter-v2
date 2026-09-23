@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     };
 
     const next = { ...vault, apiKeys: [...(vault.apiKeys || []), key] };
-    await saveVault(secret, next, vault.version);
+    await saveVault(secret, next, vault.version, { skipProviderValidation: true });
     await saveKeyIndex(key, h);
 
     // nilai penuh HANYA di respons ini
@@ -105,7 +105,7 @@ export async function PUT(request: NextRequest) {
 
     const nextKeys = [...keys];
     nextKeys[idx] = updated;
-    await saveVault(secret, { ...vault, apiKeys: nextKeys }, vault.version);
+    await saveVault(secret, { ...vault, apiKeys: nextKeys }, vault.version, { skipProviderValidation: true });
     await saveKeyIndex(updated, updated.keyHash);
     if (body?.resetUsage) await resetUsage(updated.id);
 
@@ -128,7 +128,7 @@ export async function DELETE(request: NextRequest) {
     const target = keys.find((k) => k.id === id);
     if (!target) return NextResponse.json({ error: "Key tidak ditemukan" }, { status: 404 });
 
-    await saveVault(secret, { ...vault, apiKeys: keys.filter((k) => k.id !== id) }, vault.version);
+    await saveVault(secret, { ...vault, apiKeys: keys.filter((k) => k.id !== id) }, vault.version, { skipProviderValidation: true });
     await deleteKeyIndex(target.keyHash);
     await resetUsage(id);
 
