@@ -9,6 +9,55 @@ import type { ApiKey, ApiKeyLimits } from "./types";
 
 export const KEY_PREFIX = "sk-srouter-";
 
+// ── whitelist model berkualifikasi provider ─────────────────────────────────
+//
+// Satu nama model bisa ada di BEBERAPA provider (mis. `glm-5.3-flash` ada di
+// provider "ai" DAN "Nata"). Menyimpan whitelist sebagai nama polos membuat
+// pilihan ambigu: centang satu baris -> dua baris ikut tercentang, dan
+// enforcement API tidak bisa membedakan keduanya.
+//
+// Solusi: simpan `provider/model`, dengan model polos (data lama) tetap
+// didukung sebagai fallback supaya API key lama tidak mendadak rusak.
+
+/** Kunci whitelist berkualifikasi provider. Model yang sudah berkualifikasi dilewatkan. */
+export function qualifiedModel(provider: string, model: string): string {
+  return `${provider}/${model}`;
+}
+
+/**
+ * Cocokkan satu model+provider terhadap whitelist.
+ * - `[]`            -> semua diizinkan
+ * - `provider/model`-> cocok persis pada pasangan itu
+ * - `model` polos   -> fallback data lama: cocok pada nama model apa pun
+ */
+export function modelAllowed(
+  whitelist: readonly string[] | undefined,
+  model: string,
+  provider?: string,
+): boolean {
+  if (!whitelist || whitelist.length === 0) return true;
+
+  // Provider diketahui -> nilai HANYA pasangan itu. Entri berkualifikasi milik
+  // provider lain tidak boleh ikut lolos, walaupun nama modelnya sama.
+  if (provider) {
+    if (whitelist.includes(qualifiedModel(provider, model))) return true;
+    // entri model polos (data lama) tetap berlaku untuk provider mana pun
+    return whitelist.includes(model);
+  }
+
+  // Provider tidak diketahui (rute alias / multi-target) -> permissive: selama ADA
+  // entri untuk model ini, jangan blokir trafik yang sah. Pemblokiran pasangan
+  // yang salah terjadi pada cabang di atas saat provider sudah ditentukan.
+  if (whitelist.includes(model)) return true;
+  return whitelist.some((entry) => entry.endsWith(`/${model}`));
+}
+
+/** Benar bila entri whitelist menunjuk pasangan provider+model tertentu. */
+export function entryMatches(entry: string, provider: string, model: string): boolean {
+  if (entry === model) return true;
+  return entry === qualifiedModel(provider, model);
+}
+
 // ── generate ────────────────────────────────────────────────────────────────
 export function generateApiKey(): string {
   const bytes = new Uint8Array(24);
@@ -74,7 +123,7 @@ export function emptyApiKey(): ApiKey {
 export type KeyCheck = { ok: true; key: ApiKey } | { ok: false; status: number; message: string };
 
 /** Cek statis: enabled, expired, model diizinkan, token belum habis. */
-export function checkKeyStatic(key: ApiKey, model: string): KeyCheck {
+export function checkKeyStatic(key: ApiKey, model: string, provider?: string): KeyCheck {
   if (!key.enabled) return { ok: false, status: 401, message: "API key dinonaktifkan" };
 
   if (key.expiresAt) {
@@ -85,8 +134,9 @@ export function checkKeyStatic(key: ApiKey, model: string): KeyCheck {
   }
 
   // whitelist model: [] = semua model yang diizinkan
-  if (key.models.length > 0 && !key.models.includes(model)) {
-    return { ok: false, status: 403, message: `Model "${model}" tidak diizinkan untuk API key ini` };
+  if (!modelAllowed(key.models, model, provider)) {
+    const where = provider ? ` dari provider "${provider}"` : "";
+    return { ok: false, status: 403, message: `Model "${model}"${where} tidak diizinkan untuk API key ini` };
   }
 
   const lim = key.limits?.tokenLimit ?? null;

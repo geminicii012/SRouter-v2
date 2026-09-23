@@ -14,6 +14,15 @@ function keyStatus(key: { enabled: boolean; expiresAt: string | null }): number 
   return null;
 }
 
+/**
+ * Entri whitelist cocok bila berkualifikasi provider ("provider/model"),
+ * atau berupa nama model polos (data lama / whitelist tanpa provider).
+ */
+function entryMatches2(whitelist: readonly string[], providerName: string, model: string): boolean {
+  if (whitelist.includes(`${providerName}/${model}`)) return true;
+  return whitelist.includes(model);
+}
+
 export async function GET(r: NextRequest) {
   try {
     await enforceRateLimit(r, "models", 120, 60);
@@ -33,7 +42,7 @@ export async function GET(r: NextRequest) {
       if (bad) return NextResponse.json({ error: { message: "KEY_INVALID" } }, { status: bad });
       const wl = match.models || [];
       if (wl.length > 0) {
-        models = models.filter((m) => wl.includes(m.model));
+        models = models.filter((m) => entryMatches2(wl, m.providerName, m.model));
         allowAliases = false;
       }
     } else {

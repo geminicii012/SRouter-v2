@@ -307,9 +307,16 @@ async function observedOpenAIResponse(response: Response, provider: Provider, mo
   return new Response(raw, { status: response.status, statusText: response.statusText, headers: response.headers });
 }
 
-export async function execute(vault: Vault, requested: string, path: string, body: any, signal?: AbortSignal, secret?: string) {
+export async function execute(vault: Vault, requested: string, path: string, body: any, signal?: AbortSignal, secret?: string, allowProviders?: string[]) {
   if (!requested || typeof requested !== "string" || requested.length > 200) throw new Error("Model tidak valid");
-  const direct = vault.providers.flatMap((provider) => provider.models.map((model) => ({ providerId: provider.id, model }))).filter((x) => x.model === requested);
+  // Whitelist API key menyebut pasangan provider+model. Kalau ada, hanya provider
+  // itu yang boleh melayani — kalau tidak, model yang namanya sama di provider
+  // lain akan tetap terpakai, dan whitelist cuma jadi hiasan di /v1/models.
+  const allowed = allowProviders && allowProviders.length ? new Set(allowProviders) : null;
+  const direct = vault.providers
+    .filter((provider) => !allowed || allowed.has(provider.name))
+    .flatMap((provider) => provider.models.map((model) => ({ providerId: provider.id, model })))
+    .filter((x) => x.model === requested);
   const targets = (vault.routes[requested] || direct) as RouteTarget[];
   if (!targets.length) throw new Error(`Route/model ${requested} tidak ditemukan`);
   let last = "Semua provider gagal";

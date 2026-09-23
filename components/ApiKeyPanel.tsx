@@ -13,6 +13,7 @@ import {
   AlertTriangle, RefreshCw, Eye, EyeOff,
 } from "lucide-react";
 import { copyText } from "@/lib/copy";
+import { qualifiedModel } from "@/lib/api-key";
 
 type Locale = "id" | "en";
 
@@ -368,6 +369,10 @@ function KeyDialog({
   onSave: (f: { name: string; models: string[]; limits: Limits; expiresAt: string | null; enabled: boolean }, id?: string) => void;
 }) {
   const [name, setName] = useState(row?.name || "");
+  // Whitelist disimpan sebagai `provider/model`. Satu nama model bisa ada di
+  // BEBERAPA provider (mis. `glm-5.3-flash` di "ai" dan "Nata"); menyimpan nama
+  // polos saja membuat dua baris itu berbagi satu state -> centang satu,
+  // dua ikut tercentang, dan hitungannya salah.
   const [selected, setSelected] = useState<string[]>(row?.models || []);
   const [tokenLimit, setTokenLimit] = useState<string>(row?.limits.tokenLimit != null ? String(row.limits.tokenLimit) : "");
   const [rpmLimit, setRpmLimit] = useState<string>(row?.limits.rpmLimit != null ? String(row.limits.rpmLimit) : "");
@@ -381,8 +386,20 @@ function KeyDialog({
   );
   const allOn = selected.length === 0;
 
-  function toggleModel(m: string) {
-    setSelected((cur) => cur.includes(m) ? cur.filter((x) => x !== m) : [...cur, m]);
+  // Cocokkan entri whitelist dgn satu baris (provider+model). Entri model polos
+  // dari data lama tetap dianggap cocok supaya API key lama tidak rusak.
+  function rowChecked(provider: string, model: string) {
+    return selected.some((entry) => entry === model || entry === qualifiedModel(provider, model));
+  }
+
+  function toggleModel(provider: string, model: string) {
+    setSelected((cur) => {
+      const key = qualifiedModel(provider, model);
+      if (cur.includes(key)) return cur.filter((entry) => entry !== key);
+      // entri lama (nama polos) untuk pasangan ini dibuang, lalu pasang yang berkualifikasi
+      const legacy = cur.filter((entry) => entry !== model);
+      return [...legacy, key];
+    });
   }
 
   const parse = (v: string): number | null => {
@@ -412,13 +429,13 @@ function KeyDialog({
             </p>
             <div className="apik-modelactions">
               <button className="btn" onClick={() => setSelected([])} type="button">semua</button>
-              <button className="btn" onClick={() => setSelected(models.map((m) => m.model))} type="button">pilih semua</button>
+              <button className="btn" onClick={() => setSelected(models.map((m) => qualifiedModel(m.provider, m.model)))} type="button">pilih semua</button>
               <input className="apik-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="cari model…" />
             </div>
             <div className="apik-modellist">
               {shown.map((m) => (
                 <label key={`${m.provider}:${m.model}`} className="apik-modelrow">
-                  <input type="checkbox" checked={selected.includes(m.model)} onChange={() => toggleModel(m.model)} />
+                  <input type="checkbox" checked={rowChecked(m.provider, m.model)} onChange={() => toggleModel(m.provider, m.model)} />
                   <span className="apik-modelname">{m.model}</span>
                   <span className="tag">{m.provider}</span>
                 </label>

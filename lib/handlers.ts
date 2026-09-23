@@ -8,6 +8,40 @@ import { checkKeyStatic } from "./api-key";
 import { addTokens, addRequest, acquireSlot, enforceRpm, loadKeyByHash, tokensUsed, touchKey } from "./api-key-store";
 import type { ApiKey } from "./types";
 
+/**
+ * Nama provider yang melayani `model`, atau undefined bila ambigu.
+ * Dipakai memeriksa whitelist API key yang berkualifikasi provider
+ * ("provider/model") — satu nama model bisa ada di beberapa provider.
+ */
+function providerFor(
+  vault: { routes: Record<string, { providerId: string }[]>; providers: { id: string; name: string; models: string[] }[] },
+  model: string,
+): string | undefined {
+  const routed = vault.routes?.[model];
+  const list = routed?.length
+    ? routed.map((t) => vault.providers.find((pp) => pp.id === t.providerId)).filter(Boolean)
+    : vault.providers.filter((pp) => (pp.models || []).includes(model));
+  const only = list.filter(Boolean) as { id: string; name: string; models: string[] }[];
+  return only.length === 1 ? only[0].name : undefined;
+}
+
+/**
+ * Nama provider yang diizinkan oleh whitelist API key.
+ * Entri berformat `provider/model` -> provider itu. Entri nama polos (data lama)
+ * tidak membatasi provider, jadi kembalikan undefined (tanpa batas).
+ */
+function allowedProvidersFor(key: { models?: string[] }): string[] | undefined {
+  const wl = key.models || [];
+  if (!wl.length) return undefined;
+  const names = new Set<string>();
+  for (const entry of wl) {
+    const i = entry.indexOf("/");
+    if (i > 0) names.add(entry.slice(0, i));
+    else return undefined; // ada entri polos -> jangan batasi provider
+  }
+  return [...names];
+}
+
 function statusFor(message: string) {
   if (message === "RATE_LIMITED" || message === "RPM_LIMITED"
       || message === "CONCURRENT_LIMITED" || message === "TOKEN_LIMIT") return 429;
@@ -69,7 +103,10 @@ export async function handleJsonEndpoint(
       const liveUsed = await tokensUsed(matched.id).catch(() => null);
       if (liveUsed !== null) matched = { ...matched, tokensUsed: liveUsed };
 
-      const check = checkKeyStatic(matched, body.model);
+      // Vault dibutuhkan untuk menentukan provider mana yang melayani model ini,
+      // supaya whitelist yang menyebut pasangan provider+model bisa ditegakkan.
+      const policyVault = await loadVault(internal);
+      const check = checkKeyStatic(matched, body.model, providerFor(policyVault, body.model));
       if (!check.ok) {
         if (check.status === 403) throw new Error("MODEL_NOT_ALLOWED");
         if (check.status === 429) throw new Error("TOKEN_LIMIT");
@@ -86,7 +123,8 @@ export async function handleJsonEndpoint(
     }
 
     const response = await execute(vault, body.model, path, body, request.signal,
-      matched ? (process.env.SROUTER_INTERNAL_SECRET || supplied) : supplied);
+      matched ? (process.env.SROUTER_INTERNAL_SECRET || supplied) : supplied,
+      matched ? allowedProvidersFor(matched) : undefined);
 
     // Tanpa API key (Router Secret) -> teruskan apa adanya, tanpa pencatatan.
     if (!matched) {
